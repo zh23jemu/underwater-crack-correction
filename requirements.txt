@@ -1,0 +1,22 @@
+# 项目通用 Python 依赖。
+#
+# 注意：
+# - torch / torchvision 不放在这里统一安装，因为 Slurm GPU 环境需要根据 CUDA 驱动能力选择 wheel。
+# - 当前集群约定优先使用 CUDA 12.x 兼容 PyTorch，例如：
+#   .venv/bin/python -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+# - 安装完 PyTorch 后，再执行：
+#   .venv/bin/python -m pip install -r requirements.txt
+
+numpy
+opencv-python-headless
+scipy
+tqdm
+pillow
+natsort
+scikit-image
+matplotlib
+pandas
+
+# 文档整理和报告生成用依赖；不影响训练，但保留便于继续维护 Word 报告。
+python-docx
+pdf2image

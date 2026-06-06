@@ -1,0 +1,108 @@
+# 项目级 AGENTS.md
+
+## 项目目标
+
+本项目用于整理、分析、训练和后续优化“水下裂缝图像扭曲校正”算法。当前仓库已经包含用户补充的代码、合成数据、原始裂缝图、checkpoint、训练日志、评估结果和两份 Word 报告。核心任务是提升水下裂缝扭曲复原效果，重点解决当前可视化效果不好、裂缝复原不足、预测恢复量偏小、工程门限未达标等问题。
+
+## 技术栈
+
+- 文档格式：Microsoft Word `.docx`
+- 报告生成痕迹：文档元数据均显示由 `python-docx` 生成
+- 运行环境：已创建项目本地 Python 虚拟环境 `.venv`；当前 `.venv` 已安装文档处理依赖和 `numpy`，但尚未安装训练所需的 PyTorch、OpenCV、SciPy、tqdm、natsort、scikit-image 等依赖
+- 深度学习框架：PyTorch 代码结构，训练入口为 `train_v2.py`
+- 图像与数据：OpenCV / NumPy / Pillow 风格的数据生成、读取、推理和可视化流程
+- 已新增 Slurm 训练包装入口和提交脚本；集群训练应优先使用 `slurm_train_crackwarp.sbatch`，通过 `run_train_slurm.py` 覆盖输出目录和训练参数，避免误清空历史结果
+
+## 当前架构
+
+- `水下裂缝扭曲校正实验报告(1).docx`：普通版报告，侧重训练收敛、典型样本可视化和综合结论。
+- `水下裂缝扭曲校正实验报告_详细版(1).docx`：详细版报告，额外包含 checkpoint 横向评估、逐图像误差分布、ROI 局部观察、门限失败原因和优化建议。
+- `generate_underwater_v2.py`：根据真实裂缝图合成水下扭曲训练样本与 `.npy` 逆映射标签。
+- `MyDataSet.py`：读取成对的 `.png` / `.png.npy` 样本，并实现水下颜色、散射、噪声、模糊和几何增强。
+- `models/crack_warp_net.py`：主网络，包含编码器-解码器、Transformer、CBAM、NAFBlock 和迭代 flow refinement 等结构。
+- `loss_crack.py`：裂缝优先损失，包含坐标损失、边缘感知平滑、folding penalty、频域损失、光度一致性和 crack mask 加权项。
+- `train_v2.py`：训练入口，使用 `config_crack.py` 配置，包含训练/验证划分、AMP、EMA、warm restart、mixup、checkpoint 保存等逻辑。
+- `infer_epoch.py`：推理与可视化入口；现有文档中仍有历史脚本名 `infer_epoch80.py`，后续需要统一。
+- `utils/evaluate_metrics.py` 与 `utils/checkpoint_gate_report.py`：裂缝中心指标评估和 checkpoint 门限诊断。
+- `under-crack-images/images/`：原始真实裂缝图，共 1,037 张 `.jpg`。
+- `underwater_crack_v3/`：主合成训练集，共 10,360 张 `.png` 与 10,360 个 `.png.npy` 标签，`manifest.json` 记录 `samples_per_image=10` 与 `total_generated=10360`。
+- `output_crackwarp/`：已有训练输出，包含 `train.log`、13 个 `.pth` checkpoint、评估 CSV/JSON、gate report 和可视化结果。
+- `.gitignore`：忽略本地虚拟环境、Python 缓存、编辑器目录和系统生成文件。
+- `.venv/`：项目本地 Python 虚拟环境，不应入库。
+
+## 开发规范
+
+- 所有 Python 操作必须使用项目本地 `.venv`，不要使用系统 Python。
+- 编辑文件前必须先读取和理解现有内容。
+- 保持最小修改，不做无关重构。
+- 不直接删除文件；如需清理文件，只提供建议命令或先征求确认。
+- 新增代码或脚本时，应包含较详细的中文注释，说明用途、关键逻辑、参数、返回值和重要分支。
+- 后续若新增训练代码、推理脚本或长时间运行任务，应评估是否需要 Slurm 脚本；GPU 任务默认优先使用 `gpu` 分区，账号默认 `gpo-ifv7xx`，QOS 默认 `normal`。
+- 当前 `train_v2.py` 中 `restart_training=True` 会删除目标输出目录；Slurm 训练必须使用独立输出目录，默认写入 `output_crackwarp_slurm/<jobid>`，不要直接覆盖已有 `output_crackwarp/`。
+
+## Current Status
+
+已完成用户补充代码和数据后的只读确认。当前仓库已经从纯报告资料仓库变为可继续工程诊断和训练优化的算法项目：总计约 21,913 个非 `.venv` 文件、约 27.25GB，其中主训练集 `underwater_crack_v3` 约 26.21GB，训练输出 `output_crackwarp` 约 0.98GB。主数据集配对完整，抽样标签为 `(2,512,512)` 的 `float32`，数值范围稳定在 `[0,1]`。已有训练跑满 50 epoch，最佳 Val EPE 约 117.885px；gate report 显示所有 checkpoint 均为 `below_minimum`，最佳 `best_epe.pth` 的 crack EPE 约 112.021px、Dice 约 0.0026、edge fidelity 约 0.295、global EPE 约 112.606px、folding rate 约 0.570，距离工程门限仍有明显差距。已新增 Slurm 训练入口，但本机 `.venv` 是从旧机器拷贝来的失效环境，当前无法执行 `.venv\Scripts\python.exe`，需要在 Slurm/新机器上重建虚拟环境后再训练。
+
+已完成项目下全部 Markdown 与 Word 文档的只读阅读和目标归纳：文档总体确认本项目的核心目标不是普通图像增强，而是学习水下裂缝扭曲图像的归一化逆映射坐标场，通过 `cv2.remap` 将扭曲裂缝恢复到更接近无扭曲的几何形态。项目评价重点应优先围绕裂缝主体位置、细裂缝分叉、边缘锐度、局部 ROI 对齐、预测恢复幅度和位移场可逆性，而不是只看全图平均损失。普通版实验报告强调模型已稳定收敛并具备一定全局校正能力；详细版报告、gate report、交接文档和工作量说明则共同指出当前结果仍未达到工程或论文级验收标准，下一阶段应以复现诊断、坐标/逆映射一致性排查、Slurm 全量训练、裂缝区域监督增强、folding/Jacobian 约束、ROI 局部细化、对比实验和消融实验为主线。
+
+## Recent Changes
+
+- 新增 `.gitignore`，忽略 `.venv/`、Python 缓存、系统文件和常见编辑器目录。
+- 新建项目本地 `.venv`，用于满足本项目 Python 环境约束。
+- 新增本项目级 `AGENTS.md`，记录项目目标、当前结构、维护规范、进展、风险和下一步计划。
+- 只读解析了两份用户提供的 `.docx` 报告，未修改报告原文。
+- 新增 `水下裂缝扭曲校正项目工作内容与工作量说明.md`，作为对外报价和项目排期说明的可编辑源稿。
+- 新增 `水下裂缝扭曲校正项目工作内容与工作量说明.docx`，作为可直接发给客户/甲方的 Word 版说明稿。
+- 为生成和结构化校验 Word 文档，在项目本地 `.venv` 中安装了 `python-docx`、`pdf2image` 和 `pillow`。
+- 用户已补充完整代码、主数据集、原始裂缝图、训练日志、checkpoint、评估结果和可视化结果。
+- 已只读统计新增内容：`underwater_crack_v3` 含 10,360 对 `.png` / `.png.npy`，`under-crack-images/images` 含 1,037 张 `.jpg`，`output_crackwarp` 含 13 个 checkpoint 和 gate/eval 结果。
+- 已抽样检查 `underwater_crack_v3` 标签范围，样本标签 shape 为 `(2,512,512)`，范围为 `[0,1]`，与项目文档中的归一化逆映射坐标定义一致。
+- 已确认当前 `.venv` 缺少训练依赖，只补充安装了用于只读标签检查的 `numpy`，尚未安装 PyTorch 或启动训练。
+- 新增 `项目交接与下一步开发计划.md`，用于整文件夹拷贝到另一台电脑后继续开发，记录当前现状、已有指标、环境搭建、小闭环复现和后续优化路线。
+- 新增 `run_train_slurm.py`，作为 Slurm 训练包装入口，在不改动原训练主逻辑的前提下覆盖训练数据、输出目录、epoch、worker、梯度累积和学习率等参数，并强制关闭 `restart_training` 以保护历史结果。
+- 新增 `slurm_train_crackwarp.sbatch`，默认使用 `gpu` 分区、`gpo-ifv7xx` 账号、`normal` QOS、1 张 GPU、8 CPU、64GB 内存和 48 小时时间限制；训练结束后自动对 `best_epe.pth` 做 120 张样本的小规模评估。
+- 更新 `.gitignore`，忽略 Slurm 标准输出和错误日志 `slurm-*.out`、`slurm-*.err`。
+- 新增 `requirements.txt`，记录除 PyTorch 以外的训练、评估、可视化和文档维护依赖；PyTorch 仍需按集群 CUDA 环境单独安装 CUDA 12.x 兼容 wheel。
+- 只读检查了项目下全部 6 份 Markdown 文档和 3 份 Word 文档，确认项目目标、验收口径、已有训练状态、主要短板、工作量估算和下一步 Slurm 训练需求。
+- 完成一次当前项目明显问题只读体检：确认主要风险集中在现有 checkpoint 指标远未达标、`predict.py` 旧推理坐标逻辑可疑、`restart_training=True` 有清空历史输出风险、训练脚本缺少严格断点续训、文档脚本名/命令过时、`.venv` 已失效、folding 约束与评估口径仍需复核。
+- 用户删除旧 `.venv` 后，已使用本机 Python 3.11 重新创建项目本地 `.venv`，安装 PyTorch `2.12.0+cu126`、torchvision `0.27.0+cu126` 和 `requirements.txt` 中的训练/评估/文档依赖；本机检测到 CUDA 可用，GPU 为 Quadro T1000。
+- 新增 `smoke_train_verify.py`，用于本机最小训练验证。已在 CPU 和 GPU 上分别跑通 2 个样本、64×64、`base_ch=4`、`n_iter=0`、1 epoch 的最小训练和验证，确认数据读取、模型前向、loss、反传、验证和权重保存链路可用。
+- 更新 `.gitignore`，忽略 `output_smoke_local*/` 本地 smoke 输出目录。
+
+## Next TODO
+
+- 在另一台电脑继续开发时，优先阅读 `项目交接与下一步开发计划.md`，按其中顺序先搭环境、做只读检查和小闭环复现。
+- 在 Slurm 集群上训练前，先重新创建项目本地 `.venv`，按 CUDA 12.x 兼容策略安装 `torch torchvision` 和其余训练依赖；不要复用从 Windows/旧电脑拷贝来的 `.venv`。
+- 首次 Slurm 训练建议先提交短任务或较小 epoch 复现，确认 `run_train_slurm.py` 输出目录、CUDA、数据读取和评估流程正常后，再扩大到 50-80 epoch。
+- Slurm 前建议复用 `smoke_train_verify.py` 或提交 `EPOCHS=2` 的短任务做集群 smoke；确认集群 CUDA、数据路径和输出目录正常后，再提交正式训练。
+- 补齐训练环境依赖：优先根据当前机器 CUDA 能力安装 PyTorch CUDA 12.x 兼容版本，再通过 `requirements.txt` 安装 `opencv-python-headless`、`scipy`、`tqdm`、`natsort`、`scikit-image` 等依赖。
+- 先做不训练的运行检查：导入模型、加载 `best_epe.pth`、读取少量样本、跑一次小规模推理/评估，确认代码路径、checkpoint 结构和设备可用性。
+- 修正文档与代码不一致：项目文档提到 `infer_epoch80.py`，实际文件为 `infer_epoch.py`。
+- 梳理 `predict.py` 与 `infer_epoch.py` 的 remap 坐标逻辑，重点排查是否存在 `abs()`、坐标方向、归一化尺度或 `map_x/map_y` 使用不一致导致恢复量偏小。
+- 在确认环境可跑后，优先做小样本诊断评估和可视化复现，再决定是否进入完整训练或结构改动。
+- 如果需要继续完善对外稿，可根据实际报价策略进一步压缩为一页版、报价单版或合同附件版。
+- 如果需要做 Word 视觉级 QA，需在本机安装可命令行调用的 LibreOffice `soffice`，然后重新渲染检查页面布局。
+
+## Open Issues
+
+- 两份报告中的实验配置不完全一致：普通版为 80 epoch、13.14M 参数、数据总量 10370；详细版为 50 epoch、17.84M 参数、数据总量 10360。
+- 普通版更强调收敛和视觉效果，详细版则指出所有 checkpoint 未达到工程门限；两份报告若要合并，需要先确认它们是否来自同一实验阶段或不同版本模型。
+- 文档口径存在“普通报告较乐观、详细报告与 gate report 较严格”的差异；后续汇报时应以详细版报告和 gate report 的工程门限作为当前真实状态依据，同时保留普通版报告作为早期实验阶段记录。
+- `predict.py` 中旧逻辑直接将网络输出坐标喂给 `cv2.remap`，且 `predict_cv` 使用 `np.abs(preds[:, :, 0/1])`，与 `infer_epoch.py` 中 `flow * 511` 的归一化逆映射坐标转换不一致，可能导致恢复幅度、方向和可视化判断失真。
+- `loss_crack.py` 中 folding penalty 当前直接对归一化采样坐标求 `det = du_dx * dv_dy - du_dy * dv_dx` 并惩罚负值，后续需要复核它是否正确反映逆映射场相对于像素网格或恒等映射的局部可逆性；当前 gate report 的 folding rate 约 0.57，说明这条约束或其权重仍不足以控制局部折叠。
+- 当前 `.venv` 已在本机重建并能完成最小 CPU/GPU smoke；但 Quadro T1000 显存和算力较弱，首次尝试 4 样本、128×128、较宽轻量模型 smoke 超过 5 分钟未完成，说明本机不适合作为正式训练环境。
+- 当前 `train_v2.py` 只保存模型权重，没有保存 optimizer、scheduler、scaler 和 epoch 状态，因此还不支持严格断点续训；Slurm 中断后只能从已有权重重新初始化训练，或后续先扩展 checkpoint 结构。
+- `.gitignore` 当前忽略 `*.log` 和 `*.pth`，但没有整体忽略 `underwater_crack_v3/`、`under-crack-images/`、`output_crackwarp/` 或 `.npy`；如果后续初始化 Git，需要确认哪些大目录应通过外部数据管理而不是直接入库。
+- 现有 `PROJECT_WORKFLOW_GUIDE.md` / `OPTIMIZATION_GUIDE.md` 的命令使用系统 `python`，需要后续统一改为项目 `.venv` 调用方式。
+- 已有 gate report 中 checkpoint 路径仍包含原机器绝对路径 `D:\nxy1\GOOD_cnn_new\GOOD_cnn\...`，后续报告或脚本应避免依赖旧路径。
+- 现有模型虽然训练收敛，但 gate report 全部未达标，核心瓶颈集中在 crack EPE、Dice、edge fidelity 和 folding rate。
+- 当前环境缺少 LibreOffice `soffice`，因此新增 Word 说明稿已完成结构化校验，但未完成页面 PNG 渲染级视觉 QA。
+
+## Architecture Decisions
+
+- 当前将仓库定位为“水下裂缝扭曲校正算法工程与报告整理工作区”，代码、数据、训练输出和报告需要共同维护。
+- 保留两份用户原始报告，不直接覆盖或改写原文件。
+- `.venv/` 作为本地解析、评估和后续训练环境，已通过 `.gitignore` 排除。
+- 对外工作量说明同时保留 Markdown 源稿和 Word 交付稿，便于后续快速改文字并生成客户可读版本。
+- Slurm 训练采用包装入口覆盖配置，而不是复制一份训练主脚本；这样保留 `train_v2.py` 作为唯一训练逻辑源，减少后续调参时的维护分叉。
