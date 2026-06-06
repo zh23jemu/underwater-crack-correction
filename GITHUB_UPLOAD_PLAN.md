@@ -43,15 +43,38 @@ GitHub Release 单个资产需要控制在 2GB 以下，因此最大的数据集
 轻量代码：
 
 ```bash
-git clone <仓库地址>
+git clone https://github.com/zh23jemu/underwater-crack-correction.git
 cd underwater-crack-correction
 ```
 
 Release 资产：
 
 ```bash
-gh release download data-v1 --repo <owner>/<repo> --dir release_assets
+gh release download data-v1 --repo zh23jemu/underwater-crack-correction --dir release_assets
 ```
 
 下载后按实际资产格式解压到项目根目录，再运行 smoke 或 Slurm 训练。
 
+当前 Release 地址：
+
+- https://github.com/zh23jemu/underwater-crack-correction/releases/tag/data-v1
+
+当前 Release 资产：
+
+- `under_crack_images.zip`：原始裂缝图。
+- `output_crackwarp.zip`：已有训练输出、checkpoint、评估和可视化结果。
+- `underwater_crack_v3.tar.zst.part-001` 到 `underwater_crack_v3.tar.zst.part-031`：主合成训练集分卷。
+
+在 Linux/Slurm 服务器上合并并解压主训练集：
+
+```bash
+mkdir -p release_assets
+gh release download data-v1 --repo zh23jemu/underwater-crack-correction --dir release_assets
+
+cat release_assets/underwater_crack_v3.tar.zst.part-* > release_assets/underwater_crack_v3.tar.zst
+tar -xf release_assets/underwater_crack_v3.tar.zst
+unzip release_assets/under_crack_images.zip
+unzip release_assets/output_crackwarp.zip
+```
+
+如果服务器没有 `gh`，也可以在 Release 页面手动下载所有资产，或使用 GitHub API 下载。
