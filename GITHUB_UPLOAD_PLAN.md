@@ -78,3 +78,43 @@ unzip release_assets/output_crackwarp.zip
 ```
 
 如果服务器没有 `gh`，也可以在 Release 页面手动下载所有资产，或使用 GitHub API 下载。
+
+## 5. 下载完整性校验
+
+如果解压时报错，先不要急着重下全部文件，应先校验下载完整性：
+
+```bash
+cd underwater-crack-correction
+
+# 如果 SHA256SUMS.txt 来自 Git 仓库根目录，先复制到 release_assets。
+cp SHA256SUMS.txt release_assets/
+
+cd release_assets
+sha256sum -c SHA256SUMS.txt
+```
+
+期望所有条目均显示 `OK`。如果只有某一个 `part-xxx` 失败，只需要重新下载那个分卷。
+
+也可以快速确认分卷数量：
+
+```bash
+ls release_assets/underwater_crack_v3.tar.zst.part-* | wc -l
+```
+
+期望输出为 `31`。
+
+合并后可先测试压缩包是否能被识别：
+
+```bash
+cat release_assets/underwater_crack_v3.tar.zst.part-* > release_assets/underwater_crack_v3.tar.zst
+tar -tf release_assets/underwater_crack_v3.tar.zst >/dev/null
+```
+
+如果 `sha256sum -c` 全部通过，但 `tar -tf` 报不认识 zstd 或类似错误，通常是服务器 `tar` 不支持 zstd。可改用：
+
+```bash
+zstd -d release_assets/underwater_crack_v3.tar.zst -o release_assets/underwater_crack_v3.tar
+tar -xf release_assets/underwater_crack_v3.tar
+```
+
+如果服务器没有 `zstd`，可在集群环境中安装或加载对应模块。

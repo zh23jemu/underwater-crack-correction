@@ -71,7 +71,8 @@
 - 更新 `.gitignore`，忽略 `output_smoke_local*/` 本地 smoke 输出目录。
 - 初始化本地 Git 仓库并推送到 public GitHub 仓库 `https://github.com/zh23jemu/underwater-crack-correction`；普通 Git 历史只包含代码、文档、脚本和小型说明文件，不包含大数据、历史训练输出、虚拟环境或本地 smoke 产物。
 - 创建 GitHub Release `data-v1`，地址为 `https://github.com/zh23jemu/underwater-crack-correction/releases/tag/data-v1`；已上传 33 个 Release assets，总大小约 23.66GB，包括 `under_crack_images.zip`、`output_crackwarp.zip` 和 `underwater_crack_v3.tar.zst.part-001` 至 `part-031`。
-- 新增并更新 `GITHUB_UPLOAD_PLAN.md`，记录 Git 内容与 Release 大文件资产划分，以及服务器侧 `gh release download`、分卷合并和解压命令。
+- 已上传 `SHA256SUMS.txt` 到 Release，并在仓库根目录新增同名校验清单；服务器端下载后应优先执行 `sha256sum -c SHA256SUMS.txt` 验证 2 个 zip 和 31 个主数据集分卷是否完整。
+- 新增并更新 `GITHUB_UPLOAD_PLAN.md`，记录 Git 内容与 Release 大文件资产划分，以及服务器侧 `gh release download`、分卷合并、完整性校验和解压命令。
 
 ## Next TODO
 
