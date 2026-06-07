@@ -73,6 +73,7 @@
 - 创建 GitHub Release `data-v1`，地址为 `https://github.com/zh23jemu/underwater-crack-correction/releases/tag/data-v1`；已上传 33 个 Release assets，总大小约 23.66GB，包括 `under_crack_images.zip`、`output_crackwarp.zip` 和 `underwater_crack_v3.tar.zst.part-001` 至 `part-031`。
 - 已上传 `SHA256SUMS.txt` 到 Release，并在仓库根目录新增同名校验清单；服务器端下载后应优先执行 `sha256sum -c SHA256SUMS.txt` 验证 2 个 zip 和 31 个主数据集分卷是否完整。
 - 新增并更新 `GITHUB_UPLOAD_PLAN.md`，记录 Git 内容与 Release 大文件资产划分，以及服务器侧 `gh release download`、分卷合并、完整性校验和解压命令。
+- 新增 `新电脑接续工作指南.md`，用于换电脑后继续工作，集中记录 GitHub 仓库、Release 数据、服务器端数据已解压状态、新电脑 clone/pull、服务器环境重建、Slurm smoke、正式训练和后续排查路线。
 
 ## Next TODO
 
@@ -81,6 +82,7 @@
 - 首次 Slurm 训练建议先提交短任务或较小 epoch 复现，确认 `run_train_slurm.py` 输出目录、CUDA、数据读取和评估流程正常后，再扩大到 50-80 epoch。
 - Slurm 前建议复用 `smoke_train_verify.py` 或提交 `EPOCHS=2` 的短任务做集群 smoke；确认集群 CUDA、数据路径和输出目录正常后，再提交正式训练。
 - 到 Slurm 服务器后，优先 `git clone https://github.com/zh23jemu/underwater-crack-correction.git`，再使用 GitHub Release `data-v1` 下载大文件资产；主训练集需先合并 31 个 `underwater_crack_v3.tar.zst.part-*` 分卷再解压。
+- 换到新电脑后，优先阅读 `新电脑接续工作指南.md`；新电脑只需 clone/pull GitHub 轻量仓库，服务器端数据已确认下载和解压，后续主要在服务器上做数据数量确认、重建 `.venv`、跑 Slurm smoke 和正式训练。
 - 补齐训练环境依赖：优先根据当前机器 CUDA 能力安装 PyTorch CUDA 12.x 兼容版本，再通过 `requirements.txt` 安装 `opencv-python-headless`、`scipy`、`tqdm`、`natsort`、`scikit-image` 等依赖。
 - 先做不训练的运行检查：导入模型、加载 `best_epe.pth`、读取少量样本、跑一次小规模推理/评估，确认代码路径、checkpoint 结构和设备可用性。
 - 修正文档与代码不一致：项目文档提到 `infer_epoch80.py`，实际文件为 `infer_epoch.py`。
