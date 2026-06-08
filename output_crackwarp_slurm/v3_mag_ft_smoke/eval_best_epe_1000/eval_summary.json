@@ -1,0 +1,18 @@
+{
+  "model": "output_crackwarp_slurm/v3_mag_ft_smoke/best_epe.pth",
+  "img_dir": "underwater_crack_v3",
+  "num_samples": 1000,
+  "primary_crack_epe_px_mean": 112.94023895263672,
+  "primary_crack_epe_px_std": 20.955373764038086,
+  "primary_crack_edge_fidelity_mean": 0.2009497582912445,
+  "primary_crack_edge_fidelity_std": 0.17881742119789124,
+  "primary_warp_crack_dice_mean": 0.25946053862571716,
+  "primary_warp_crack_dice_std": 0.08092691004276276,
+  "global_epe_px_mean": 111.84008026123047,
+  "global_epe_px_std": 8.948081016540527,
+  "global_edge_fidelity_mean": 0.22141039371490479,
+  "global_edge_fidelity_std": 0.15454699099063873,
+  "folding_rate_mean": 0.5898622274398804,
+  "folding_rate_std": 0.004133632406592369,
+  "crack_ratio_mean": 0.14487585425376892
+}
