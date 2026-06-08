@@ -98,6 +98,7 @@
 - 2026-06-08 新增 `utils/compare_eval_per_image.py`，用于从新旧模型逐图评估结果中挑选诊断样本；同时更新 `utils/export_crack_roi_visuals.py`，支持通过 `--image_list` 只导出指定样本的 ROI 可视化。
 - 2026-06-08 拉取服务器提交 `f6f4645`，完成对 `compare_old_vs_v2` 和共同失败 ROI 图的本地分析；确认 v2 的改进不稳定，主要问题集中在大形变、边界区域和裂缝细节保持。
 - 2026-06-08 新增整图 flow 诊断脚本 `utils/export_flow_diagnostics.py`，为下一步服务器端导出 EPE/folding/位移幅度热图做准备。
+- 2026-06-08 修复 `utils/export_flow_diagnostics.py` 直接运行时找不到根目录模块的问题：脚本启动时显式把项目根目录加入 `sys.path`，以兼容服务器命令 `.venv/bin/python utils/export_flow_diagnostics.py ...`。
 
 ## Next TODO
 

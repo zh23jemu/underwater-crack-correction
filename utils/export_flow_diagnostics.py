@@ -15,12 +15,21 @@
 import argparse
 import csv
 import os
+import sys
 from pathlib import Path
 
 import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
+
+# 允许从仓库根目录直接运行：
+# `.venv/bin/python utils/export_flow_diagnostics.py ...`
+# 这种方式下 Python 默认只把 `utils/` 放入 sys.path，可能找不到根目录下的
+# `loss_crack.py` 和 `models/`。这里显式加入项目根目录，保持服务器运行命令简单。
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from loss_crack import CrackMaskEstimator
 from models.crack_warp_net import build_crack_warp_net
