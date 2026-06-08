@@ -48,6 +48,7 @@ WORKERS="${WORKERS:-${SLURM_CPUS_PER_TASK:-8}}"
 ACCUM_STEPS="${ACCUM_STEPS:-4}"
 LR="${LR:-2e-5}"
 W_CRACK_MAG="${W_CRACK_MAG:-0.0}"
+INIT_CHECKPOINT="${INIT_CHECKPOINT:-}"
 
 echo "========== CrackWarp Slurm 训练 =========="
 echo "提交目录: ${PWD}"
@@ -59,6 +60,7 @@ echo "Workers: ${WORKERS}"
 echo "Accum steps: ${ACCUM_STEPS}"
 echo "LR: ${LR}"
 echo "W_CRACK_MAG: ${W_CRACK_MAG}"
+echo "INIT_CHECKPOINT: ${INIT_CHECKPOINT}"
 echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-未设置}"
 echo "=========================================="
 
@@ -73,6 +75,7 @@ echo "=========================================="
   --accum-steps "${ACCUM_STEPS}" \
   --lr "${LR}" \
   --w-crack-mag "${W_CRACK_MAG}" \
+  --init-checkpoint "${INIT_CHECKPOINT}" \
   --gpu-id 0
 
 # 训练结束后做一轮小规模门限前诊断，方便快速判断这次训练有没有方向性改善。

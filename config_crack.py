@@ -71,3 +71,4 @@ vis_interval = 10
 # ---- Resume ----
 restart_training = True
 checkpoint = ''
+init_checkpoint = ''  # 仅加载模型权重做 fine-tune，不恢复 optimizer/scheduler 状态

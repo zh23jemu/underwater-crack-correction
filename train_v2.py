@@ -44,6 +44,39 @@ def compute_epe(pred, gt):
         return float('nan')
 
 
+def load_initial_checkpoint(net, checkpoint_path, device, log_file):
+    """
+    从已有模型权重初始化网络，用于短程 fine-tune。
+
+    当前训练脚本保存的是模型 state_dict，不包含 optimizer、scheduler 或 scaler。
+    因此这里不是严格断点续训，而是“加载已有权重后开启一轮新实验”。这适合
+    v3 这类 loss 权重小改动：保留 v2 已学到的几何校正能力，只观察新 loss
+    是否能稳定校准裂缝区域位移幅度。
+    """
+    if not checkpoint_path:
+        return
+    if not os.path.exists(checkpoint_path):
+        raise FileNotFoundError(f'Initial checkpoint not found: {checkpoint_path}')
+
+    ckpt = torch.load(checkpoint_path, map_location=device)
+    if isinstance(ckpt, dict):
+        if 'state_dict' in ckpt:
+            ckpt = ckpt['state_dict']
+        elif 'model' in ckpt:
+            ckpt = ckpt['model']
+
+    cleaned = {}
+    for key, value in ckpt.items():
+        cleaned[key.replace('module.', '')] = value
+
+    missing, unexpected = net.load_state_dict(cleaned, strict=False)
+    log_message(f'Loaded initial checkpoint: {checkpoint_path}', log_file)
+    if missing:
+        log_message(f'  Missing keys: {len(missing)}', log_file)
+    if unexpected:
+        log_message(f'  Unexpected keys: {len(unexpected)}', log_file)
+
+
 def log_message(msg, log_file=None):
     ts  = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     out = f'[{ts}] {msg}'
@@ -178,6 +211,7 @@ def main():
     # ── 模型 ──
     log_message('Building model...', log_file)
     net = build_crack_warp_net().to(device)
+    load_initial_checkpoint(net, getattr(config, 'init_checkpoint', ''), device, log_file)
     # Ensure all parameters and buffers are on the correct device (robust move)
     for name, p in net.named_parameters():
         if p.device != device:

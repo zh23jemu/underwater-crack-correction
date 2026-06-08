@@ -67,6 +67,10 @@
 
 2026-06-08 已在本地新增 `DisplacementMagnitudeConsistencyLoss`，并通过 `w_crack_mag` 参数接入 `CrackWarpLoss`、`train_v2.py`、`run_train_slurm.py` 和 `slurm_train_crackwarp.sbatch`。该损失默认权重为 0，不影响当前 v2 复现；服务器可通过环境变量 `W_CRACK_MAG=0.3` 启用，用于约束裂缝 ROI 内预测位移幅度接近 GT 位移幅度，降低样本间过小/过大的恢复幅度漂移。
 
+2026-06-08 服务器运行 `W_CRACK_MAG=0.3 EPOCHS=2 OUTPUT_DIR=output_crackwarp_slurm/v3_mag_smoke sbatch --partition=gpuHz --time=01:00:00 slurm_train_crackwarp.sbatch` 已完成，`.err` 为空但指标灾难性：global EPE 约 298.617、folding rate 约 0.99938。该结果说明新 loss 链路能跑通，但从随机初始化训练 2 epoch 没有诊断价值，且可能把早期位移场推向严重折叠。下一步已改为支持从 v2 `best_epe.pth` 初始化进行短程 fine-tune。
+
+2026-06-08 本地新增 `INIT_CHECKPOINT` / `--init-checkpoint` 入口，训练时只加载模型权重，不恢复 optimizer/scheduler/scaler。该入口用于 v3 fine-tune：从 `output_crackwarp_slurm/v2/best_epe.pth` 初始化，以较小学习率和较低 `W_CRACK_MAG` 验证位移幅度一致性损失是否能在不破坏 v2 几何能力的前提下改善裂缝 ROI 稳定性。
+
 ## Recent Changes
 
 - 新增 `.gitignore`，忽略 `.venv/`、Python 缓存、系统文件和常见编辑器目录。
@@ -108,6 +112,7 @@
 - 2026-06-08 拉取并分析服务器生成的共同失败样本整图 flow 诊断结果；确认 v2 对全图 EPE 有局部改善，但裂缝 ROI EPE 不稳定，恢复幅度存在样本依赖的过小/过大问题。
 - 2026-06-08 拉取并分析 `flow_diag_new_better` 与 `flow_diag_old_better`，确认 v2 的提升来自抑制旧模型过大位移，而退化样本多为 v2 位移幅度异常增大。
 - 2026-06-08 新增可开关的裂缝 ROI 位移幅度一致性损失 `w_crack_mag`，默认关闭；Slurm 脚本支持用 `W_CRACK_MAG` 环境变量打开。
+- 2026-06-08 根据服务器 v3 从零 smoke 结果修正策略：新增 `INIT_CHECKPOINT` 微调入口，避免新 loss 从随机初始化阶段主导不稳定位移场。
 
 ## Next TODO
 
@@ -135,6 +140,7 @@
 - 服务器拉取 `utils/export_flow_diagnostics.py` 后，先对 `joint_failure_images.txt` 导出整图诊断面板；如果 EPE 热图与 folding 热区集中在边界和大形变区域，优先调整 folding/Jacobian 约束和边界采样；如果位移幅度图整体偏小，则优先排查坐标尺度与恢复幅度约束。
 - 下一步需要服务器继续对 `new_better_images.txt` 和 `old_better_images.txt` 分别导出整图 flow 诊断面板，用正反样本确认 v2 改善和退化的共同模式，再决定 loss/结构改动。
 - 下一步服务器需先做语法检查和短训 smoke：`W_CRACK_MAG=0.3 EPOCHS=2 OUTPUT_DIR=output_crackwarp_slurm/v3_mag_smoke sbatch --partition=gpuHz --time=01:00:00 slurm_train_crackwarp.sbatch`。若 smoke 正常且 120 样本评估没有明显退化，再考虑 20-50 epoch v3 正式训练。
+- 下一步服务器应改跑 fine-tune smoke，而不是从零训练：`INIT_CHECKPOINT=output_crackwarp_slurm/v2/best_epe.pth W_CRACK_MAG=0.1 LR=5e-6 EPOCHS=2 OUTPUT_DIR=output_crackwarp_slurm/v3_mag_ft_smoke sbatch --partition=gpuHz --time=02:00:00 slurm_train_crackwarp.sbatch`。重点观察日志是否出现 `Loaded initial checkpoint`、`c_mag`，以及 120 样本指标是否接近或优于 v2。
 
 ## Open Issues
 
