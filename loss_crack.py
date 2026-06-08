@@ -242,6 +242,44 @@ class FoldingPenalty(nn.Module):
         return F.relu(-det).mean()
 
 
+class DisplacementMagnitudeConsistencyLoss(nn.Module):
+    """
+    位移幅度一致性损失。
+
+    当前诊断显示：v2 在部分样本上通过降低位移幅度改善 EPE，但在另一些样本上会
+    产生过大的错误位移，导致裂缝 ROI 明显错位。因此这里不直接鼓励“更大恢复量”
+    或“更小恢复量”，而是约束预测坐标场相对恒等网格的位移幅度要接近 GT 标签。
+
+    损失只比较位移模长，不替代坐标损失；它的作用是给恢复幅度提供一个独立校准项，
+    减少样本间过小/过大的幅度漂移。若传入 crack mask，则优先在裂缝区域计算，
+    让幅度校准服务于裂缝主体复原。
+    """
+
+    def __init__(self, eps=1e-6):
+        super().__init__()
+        self.eps = eps
+
+    @staticmethod
+    def _identity_like(flow):
+        """生成与 flow 同尺寸、同 device 的归一化恒等坐标场。"""
+        _, _, h, w = flow.shape
+        ys, xs = torch.meshgrid(
+            torch.linspace(0.0, 1.0, h, device=flow.device, dtype=flow.dtype),
+            torch.linspace(0.0, 1.0, w, device=flow.device, dtype=flow.dtype),
+            indexing='ij',
+        )
+        return torch.stack([xs, ys], dim=0).unsqueeze(0).expand(flow.shape[0], -1, -1, -1)
+
+    def forward(self, pred, target, mask=None):
+        ident = self._identity_like(pred)
+        pred_mag = torch.sqrt(((pred - ident) ** 2).sum(dim=1, keepdim=True) + self.eps)
+        target_mag = torch.sqrt(((target - ident) ** 2).sum(dim=1, keepdim=True) + self.eps)
+        diff = torch.sqrt((pred_mag - target_mag) ** 2 + self.eps)
+        if mask is not None:
+            return (diff * mask).sum() / mask.sum().clamp_min(1.0)
+        return diff.mean()
+
+
 class CrackWarpLoss(nn.Module):
     def __init__(
         self,
@@ -256,6 +294,7 @@ class CrackWarpLoss(nn.Module):
         w_crack_coord=1.2,
         w_crack_grad=0.25,
         w_crack_freq=0.15,
+        w_crack_mag=0.0,
         crack_boost=8.0,
         crack_topk=0.08,
         crack_smooth_factor=0.25,
@@ -272,6 +311,7 @@ class CrackWarpLoss(nn.Module):
         self.w_crack_coord = w_crack_coord
         self.w_crack_grad = w_crack_grad
         self.w_crack_freq = w_crack_freq
+        self.w_crack_mag = w_crack_mag
         self.crack_boost = crack_boost
         self.crack_smooth_factor = crack_smooth_factor
 
@@ -283,6 +323,7 @@ class CrackWarpLoss(nn.Module):
 
         self.crack_masker = CrackMaskEstimator(topk=crack_topk)
         self.grad_consistency = FlowGradientConsistencyLoss(eps=charbonnier_eps)
+        self.mag_consistency = DisplacementMagnitudeConsistencyLoss(eps=charbonnier_eps)
 
     def _weighted_charbonnier(self, pred, target, weight):
         diff = torch.sqrt((pred - target) ** 2 + self.char_loss.eps ** 2)
@@ -346,12 +387,14 @@ class CrackWarpLoss(nn.Module):
             crack_coord = self._masked_charbonnier(final_flow, lbl_full, crack_mask)
             crack_grad = self.grad_consistency(final_flow, lbl_full, crack_mask)
             crack_freq = self.freq_loss(final_flow * crack_mask, lbl_full * crack_mask)
+            crack_mag = self.mag_consistency(final_flow, lbl_full, crack_mask)
             crack_ratio = crack_mask.mean()
         else:
             zero = final_flow.new_zeros(())
             crack_coord = zero
             crack_grad = zero
             crack_freq = zero
+            crack_mag = zero
             crack_ratio = zero
 
         total = (
@@ -363,6 +406,7 @@ class CrackWarpLoss(nn.Module):
             + self.w_crack_coord * crack_coord
             + self.w_crack_grad * crack_grad
             + self.w_crack_freq * crack_freq
+            + self.w_crack_mag * crack_mag
         )
 
         loss_dict = {
@@ -375,6 +419,7 @@ class CrackWarpLoss(nn.Module):
             'crack_coord': crack_coord.item(),
             'crack_grad': crack_grad.item(),
             'crack_freq': crack_freq.item(),
+            'crack_mag': crack_mag.item(),
             'crack_ratio': crack_ratio.item(),
         }
         return total, loss_dict

@@ -40,6 +40,7 @@ charbonnier_eps = 1e-3
 w_crack_coord = 1.20
 w_crack_grad = 0.25
 w_crack_freq = 0.15
+w_crack_mag = 0.0  # 位移幅度一致性损失，默认关闭；v3 诊断训练可设置为 0.2-0.5
 crack_boost = 8.0
 crack_topk = 0.08
 crack_smooth_factor = 0.25

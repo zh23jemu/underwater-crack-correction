@@ -57,6 +57,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--lr", type=float, default=config.lr, help="基础学习率。")
     parser.add_argument(
+        "--w-crack-mag",
+        type=float,
+        default=getattr(config, "w_crack_mag", 0.0),
+        help="裂缝区域位移幅度一致性损失权重；默认 0 表示关闭。",
+    )
+    parser.add_argument(
         "--gpu-id",
         type=int,
         default=0,
@@ -84,6 +90,7 @@ def main() -> None:
     config.workers = args.workers
     config.accum_steps = args.accum_steps
     config.lr = args.lr
+    config.w_crack_mag = args.w_crack_mag
     config.gpu_id = args.gpu_id
 
     # 重要保护：当前原训练脚本中 restart_training=True 会删除 output_dir。
@@ -97,6 +104,7 @@ def main() -> None:
     print("[Slurm wrapper] workers =", config.workers)
     print("[Slurm wrapper] accum_steps =", config.accum_steps)
     print("[Slurm wrapper] lr =", config.lr)
+    print("[Slurm wrapper] w_crack_mag =", config.w_crack_mag)
     print("[Slurm wrapper] restart_training =", config.restart_training)
 
     # 在配置覆盖完成后再导入训练脚本，确保 train_v2.py 拿到的是同一个 config_crack 模块实例。

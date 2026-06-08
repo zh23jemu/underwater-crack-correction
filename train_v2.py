@@ -206,6 +206,7 @@ def main():
         w_crack_coord=getattr(config, 'w_crack_coord', 1.2),
         w_crack_grad=getattr(config, 'w_crack_grad', 0.25),
         w_crack_freq=getattr(config, 'w_crack_freq', 0.15),
+        w_crack_mag=getattr(config, 'w_crack_mag', 0.0),
         crack_boost=getattr(config, 'crack_boost', 8.0),
         crack_topk=getattr(config, 'crack_topk', 0.08),
         crack_smooth_factor=getattr(config, 'crack_smooth_factor', 0.25),
@@ -308,6 +309,7 @@ def main():
                     f'c_coord={loss_dict.get("crack_coord", 0.0):.5f} '
                     f'c_grad={loss_dict.get("crack_grad", 0.0):.5f} '
                     f'c_freq={loss_dict.get("crack_freq", 0.0):.5f} '
+                    f'c_mag={loss_dict.get("crack_mag", 0.0):.5f} '
                     f'c_ratio={loss_dict.get("crack_ratio", 0.0):.4f} '
                     f'lr={get_lr(optimizer):.2e}',
                     log_file
