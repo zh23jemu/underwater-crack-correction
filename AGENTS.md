@@ -71,6 +71,8 @@
 
 2026-06-08 本地新增 `INIT_CHECKPOINT` / `--init-checkpoint` 入口，训练时只加载模型权重，不恢复 optimizer/scheduler/scaler。该入口用于 v3 fine-tune：从 `output_crackwarp_slurm/v2/best_epe.pth` 初始化，以较小学习率和较低 `W_CRACK_MAG` 验证位移幅度一致性损失是否能在不破坏 v2 几何能力的前提下改善裂缝 ROI 稳定性。
 
+2026-06-09 服务器已完成 v3 fine-tune smoke：`INIT_CHECKPOINT=output_crackwarp_slurm/v2/best_epe.pth W_CRACK_MAG=0.1 LR=5e-6 EPOCHS=2 OUTPUT_DIR=output_crackwarp_slurm/v3_mag_ft_smoke sbatch --partition=gpuHz --time=02:00:00 slurm_train_crackwarp.sbatch`。日志确认已加载 v2 checkpoint，`c_mag` 正常出现，`.err` 为空。120 样本评估结果为 crack EPE 107.956345、crack edge fidelity 0.306520、Dice 0.284974、global EPE 109.795090、global edge fidelity 0.293271、folding rate 0.589715。相较 v2 的 120 样本结果，crack/global EPE 与 Dice 小幅改善，folding 略好，edge 基本持平略低，说明从 v2 初始化后开启 `w_crack_mag=0.1` 是可继续验证的方向；下一步应做 1000 样本评估和 v2-v3 逐图对比，不能直接扩大到 50 epoch。
+
 ## Recent Changes
 
 - 新增 `.gitignore`，忽略 `.venv/`、Python 缓存、系统文件和常见编辑器目录。
@@ -113,6 +115,7 @@
 - 2026-06-08 拉取并分析 `flow_diag_new_better` 与 `flow_diag_old_better`，确认 v2 的提升来自抑制旧模型过大位移，而退化样本多为 v2 位移幅度异常增大。
 - 2026-06-08 新增可开关的裂缝 ROI 位移幅度一致性损失 `w_crack_mag`，默认关闭；Slurm 脚本支持用 `W_CRACK_MAG` 环境变量打开。
 - 2026-06-08 根据服务器 v3 从零 smoke 结果修正策略：新增 `INIT_CHECKPOINT` 微调入口，避免新 loss 从随机初始化阶段主导不稳定位移场。
+- 2026-06-09 记录 v3 fine-tune smoke 结果：从 v2 checkpoint 初始化、`W_CRACK_MAG=0.1`、`LR=5e-6`、2 epoch 训练链路正常，120 样本指标较 v2 有小幅改善且 folding 未爆炸。
 
 ## Next TODO
 
@@ -141,6 +144,7 @@
 - 下一步需要服务器继续对 `new_better_images.txt` 和 `old_better_images.txt` 分别导出整图 flow 诊断面板，用正反样本确认 v2 改善和退化的共同模式，再决定 loss/结构改动。
 - 下一步服务器需先做语法检查和短训 smoke：`W_CRACK_MAG=0.3 EPOCHS=2 OUTPUT_DIR=output_crackwarp_slurm/v3_mag_smoke sbatch --partition=gpuHz --time=01:00:00 slurm_train_crackwarp.sbatch`。若 smoke 正常且 120 样本评估没有明显退化，再考虑 20-50 epoch v3 正式训练。
 - 下一步服务器应改跑 fine-tune smoke，而不是从零训练：`INIT_CHECKPOINT=output_crackwarp_slurm/v2/best_epe.pth W_CRACK_MAG=0.1 LR=5e-6 EPOCHS=2 OUTPUT_DIR=output_crackwarp_slurm/v3_mag_ft_smoke sbatch --partition=gpuHz --time=02:00:00 slurm_train_crackwarp.sbatch`。重点观察日志是否出现 `Loaded initial checkpoint`、`c_mag`，以及 120 样本指标是否接近或优于 v2。
+- 下一步服务器需要对 `output_crackwarp_slurm/v3_mag_ft_smoke/best_epe.pth` 跑 1000 样本评估，并与 v2 的 1000 样本结果做逐图对比；如果 1000 样本仍有改善，再导出 v2-v3 的正反样本 flow 诊断图。
 
 ## Open Issues
 
