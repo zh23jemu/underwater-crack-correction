@@ -57,6 +57,29 @@ def list_images(img_dir: str):
     return out
 
 
+def load_image_list(img_dir: str, image_list: str):
+    """
+    按文本清单加载图片路径。
+
+    清单通常由 `compare_eval_per_image.py` 生成，每行一个图片文件名。
+    这里同时兼容绝对路径和相对文件名：如果清单里是文件名，就自动拼到
+    `img_dir` 下；如果是绝对路径，则直接使用。不存在的文件会跳过并提示，
+    避免一个坏样本中断整批 ROI 可视化导出。
+    """
+    out = []
+    with open(image_list, "r", encoding="utf-8") as f:
+        for line in f:
+            item = line.strip()
+            if not item or item.startswith("#"):
+                continue
+            path = item if os.path.isabs(item) else os.path.join(img_dir, item)
+            if os.path.exists(path):
+                out.append(path)
+            else:
+                print(f"[WARN] image in list not found, skipped: {path}")
+    return out
+
+
 def img_to_tensor(img_bgr: np.ndarray):
     rgb = img_bgr[:, :, ::-1].astype(np.float32) / 255.0
     return torch.from_numpy(rgb.transpose(2, 0, 1)).float().unsqueeze(0)
@@ -153,6 +176,7 @@ def main():
     p.add_argument("--num", type=int, default=20, help="number of images, -1 for all")
     p.add_argument("--size", type=int, default=512, help="inference size")
     p.add_argument("--gpu", type=int, default=0, help="gpu id")
+    p.add_argument("--image_list", default=None, help="optional txt file, one image filename/path per line")
     p.add_argument("--max_rois", type=int, default=3, help="max rois per image")
     p.add_argument("--min_area", type=int, default=64, help="min crack component area")
     p.add_argument("--margin", type=int, default=16, help="roi padding pixels")
@@ -166,7 +190,7 @@ def main():
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    imgs = list_images(args.img_dir)
+    imgs = load_image_list(args.img_dir, args.image_list) if args.image_list else list_images(args.img_dir)
     if args.num > 0:
         imgs = imgs[:args.num]
 

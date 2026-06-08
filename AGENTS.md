@@ -24,6 +24,8 @@
 - `train_v2.py`：训练入口，使用 `config_crack.py` 配置，包含训练/验证划分、AMP、EMA、warm restart、mixup、checkpoint 保存等逻辑。
 - `infer_epoch.py`：推理与可视化入口；现有文档中仍有历史脚本名 `infer_epoch80.py`，后续需要统一。
 - `utils/evaluate_metrics.py` 与 `utils/checkpoint_gate_report.py`：裂缝中心指标评估和 checkpoint 门限诊断。
+- `utils/compare_eval_per_image.py`：对比新旧模型 `eval_per_image.csv`，自动挑选新模型更好、旧模型更好和共同失败的诊断样本，并输出图片清单。
+- `utils/export_crack_roi_visuals.py`：裂缝 ROI 可视化导出脚本，现已支持 `--image_list`，可按诊断样本清单批量出局部放大图。
 - `under-crack-images/images/`：原始真实裂缝图，共 1,037 张 `.jpg`。
 - `underwater_crack_v3/`：主合成训练集，共 10,360 张 `.png` 与 10,360 个 `.png.npy` 标签，`manifest.json` 记录 `samples_per_image=10` 与 `total_generated=10360`。
 - `output_crackwarp/`：已有训练输出，包含 `train.log`、13 个 `.pth` checkpoint、评估 CSV/JSON、gate report 和可视化结果。
@@ -45,6 +47,14 @@
 已完成用户补充代码和数据后的只读确认。当前仓库已经从纯报告资料仓库变为可继续工程诊断和训练优化的算法项目：总计约 21,913 个非 `.venv` 文件、约 27.25GB，其中主训练集 `underwater_crack_v3` 约 26.21GB，训练输出 `output_crackwarp` 约 0.98GB。主数据集配对完整，抽样标签为 `(2,512,512)` 的 `float32`，数值范围稳定在 `[0,1]`。已有训练跑满 50 epoch，最佳 Val EPE 约 117.885px；gate report 显示所有 checkpoint 均为 `below_minimum`，最佳 `best_epe.pth` 的 crack EPE 约 112.021px、Dice 约 0.0026、edge fidelity 约 0.295、global EPE 约 112.606px、folding rate 约 0.570，距离工程门限仍有明显差距。已新增 Slurm 训练入口，但本机 `.venv` 是从旧机器拷贝来的失效环境，当前无法执行 `.venv\Scripts\python.exe`，需要在 Slurm/新机器上重建虚拟环境后再训练。
 
 已完成项目下全部 Markdown 与 Word 文档的只读阅读和目标归纳：文档总体确认本项目的核心目标不是普通图像增强，而是学习水下裂缝扭曲图像的归一化逆映射坐标场，通过 `cv2.remap` 将扭曲裂缝恢复到更接近无扭曲的几何形态。项目评价重点应优先围绕裂缝主体位置、细裂缝分叉、边缘锐度、局部 ROI 对齐、预测恢复幅度和位移场可逆性，而不是只看全图平均损失。普通版实验报告强调模型已稳定收敛并具备一定全局校正能力；详细版报告、gate report、交接文档和工作量说明则共同指出当前结果仍未达到工程或论文级验收标准，下一阶段应以复现诊断、坐标/逆映射一致性排查、Slurm 全量训练、裂缝区域监督增强、folding/Jacobian 约束、ROI 局部细化、对比实验和消融实验为主线。
+
+截至 2026-06-07，本地目录已同步为轻量代码仓库版本：大数据目录 `underwater_crack_v3/`、`under-crack-images/` 和历史输出 `output_crackwarp/` 不在当前本地工作区内，已通过 GitHub Release `data-v1` 分发，并据 `新电脑接续工作指南.md` 记录已在服务器 `usmidet-com-prod-gpu001` 下载、校验、合并和解压完成。当前本地重点文件包括 `requirements.txt`、`run_train_slurm.py`、`slurm_train_crackwarp.sbatch`、`smoke_train_verify.py`、`GITHUB_UPLOAD_PLAN.md`、`SHA256SUMS.txt` 和 `新电脑接续工作指南.md`。下一步主要工作应在服务器上确认数据数量、重建 `.venv`、跑 Slurm smoke，然后再提交正式训练。
+
+截至 2026-06-08，服务器 Slurm 正式 50 epoch 训练已完成。任务 `34827388` 使用 `EPOCHS=50 OUTPUT_DIR=output_crackwarp_slurm/v2 sbatch --partition=gpu slurm_train_crackwarp.sbatch` 提交到 `gpu` 分区，并在 `usmidet-com-prod-gpu001` 正常跑完；`slurm-crackwarp-train-34827388.err` 为空，说明本轮未出现 OOM 或 Python Traceback。输出目录 `output_crackwarp_slurm/v2` 约 964MB，包含 `best_loss.pth`、`best_epe.pth`、`best_crack_epe.pth`、`epoch_5.pth` 至 `epoch_50.pth`、`final.pth`、`train.log` 和 `eval_best_epe_120/`。自动 120 样本评估显示：crack EPE 108.987938、global EPE 111.060646、crack Dice 0.283552、crack edge fidelity 0.308878、global edge fidelity 0.294752、folding rate 0.590619。相比历史 `output_crackwarp/best_epe.pth` 的 120 样本复评结果，EPE 和 Dice 有小幅提升，但 edge fidelity 略低、folding rate 更高，整体仍未达到三区论文目标或工程门限，下一阶段应从坐标/逆映射逻辑、folding 约束、裂缝 ROI 监督和可视化诊断继续优化。
+
+2026-06-08 继续补评 `output_crackwarp_slurm/v2/best_crack_epe.pth` 与 `best_loss.pth`，两者在 120 样本上的评估结果与 `best_epe.pth` 完全一致，说明本轮训练中三个 best 权重很可能对应同一保存时刻或同一 epoch。随后对 `best_epe.pth` 扩大到 1000 样本评估，结果为 crack EPE 113.286263、global EPE 113.095718、crack Dice 0.255906、crack edge fidelity 0.204312、global edge fidelity 0.224700、folding rate 0.590347。该结果比 120 样本更差，说明 120 样本评估偏乐观；后续报告和模型判断应优先采用更大样本或固定验证集指标。
+
+2026-06-08 进一步用同一 1000 样本口径复评历史 `output_crackwarp/best_epe.pth`，结果为 crack EPE 116.231331、global EPE 114.404533、crack Dice 0.252041、crack edge fidelity 0.218584、global edge fidelity 0.242924、folding rate 0.569224。与 v2 相比，v2 的 crack/global EPE 和 Dice 小幅更好，但 edge fidelity 与 folding rate 更差。因此 v2 的真实结论是“位置误差略有改善，但裂缝边缘复原和位移场可逆性没有改善”，不适合作为最终达标模型。
 
 ## Recent Changes
 
@@ -74,6 +84,13 @@
 - 已上传 `SHA256SUMS.txt` 到 Release，并在仓库根目录新增同名校验清单；服务器端下载后应优先执行 `sha256sum -c SHA256SUMS.txt` 验证 2 个 zip 和 31 个主数据集分卷是否完整。
 - 新增并更新 `GITHUB_UPLOAD_PLAN.md`，记录 Git 内容与 Release 大文件资产划分，以及服务器侧 `gh release download`、分卷合并、完整性校验和解压命令。
 - 新增 `新电脑接续工作指南.md`，用于换电脑后继续工作，集中记录 GitHub 仓库、Release 数据、服务器端数据已解压状态、新电脑 clone/pull、服务器环境重建、Slurm smoke、正式训练和后续排查路线。
+- 2026-06-07 复核当前轻量仓库状态：本地已不包含大数据目录和历史输出目录，`.gitignore` 已忽略 `underwater_crack_v3/`、`under-crack-images/`、`output_crackwarp/`、`release_assets/`、Slurm 日志、checkpoint 和 smoke 产物。
+- 2026-06-07 复核 Slurm 入口：`slurm_train_crackwarp.sbatch` 默认使用 `gpu` 分区、`gpo-ifv7xx` 账号、`normal` QOS、1 GPU、8 CPU、64GB 内存、48 小时，训练后会对 `best_epe.pth` 做 120 样本评估。
+- 2026-06-08 根据服务器回传结果记录正式训练进展：Slurm 任务 `34827388` 已完成 50 epoch，输出到 `output_crackwarp_slurm/v2`，`.err` 为空，并生成 `eval_best_epe_120/eval_summary.json` 与 `eval_per_image.csv`。
+- 2026-06-08 初步判断 v2 训练结果：`best_epe.pth` 的 120 样本 crack EPE 为 108.987938、global EPE 为 111.060646、crack Dice 为 0.283552；较旧权重略有改善但不足以支撑当前目标，需要进入诊断和结构/损失优化阶段。
+- 2026-06-08 追加评估 `best_crack_epe.pth`、`best_loss.pth` 和 `best_epe.pth` 的 1000 样本结果；确认三个 best checkpoint 在 120 样本上指标一致，且 1000 样本评估显示泛化指标回落。
+- 2026-06-08 追加旧模型 `output_crackwarp/best_epe.pth` 的 1000 样本复评，确认 v2 相比旧模型只是 EPE/Dice 小幅改善，edge/folding 指标退化。
+- 2026-06-08 新增 `utils/compare_eval_per_image.py`，用于从新旧模型逐图评估结果中挑选诊断样本；同时更新 `utils/export_crack_roi_visuals.py`，支持通过 `--image_list` 只导出指定样本的 ROI 可视化。
 
 ## Next TODO
 
@@ -83,6 +100,7 @@
 - Slurm 前建议复用 `smoke_train_verify.py` 或提交 `EPOCHS=2` 的短任务做集群 smoke；确认集群 CUDA、数据路径和输出目录正常后，再提交正式训练。
 - 到 Slurm 服务器后，优先 `git clone https://github.com/zh23jemu/underwater-crack-correction.git`，再使用 GitHub Release `data-v1` 下载大文件资产；主训练集需先合并 31 个 `underwater_crack_v3.tar.zst.part-*` 分卷再解压。
 - 换到新电脑后，优先阅读 `新电脑接续工作指南.md`；新电脑只需 clone/pull GitHub 轻量仓库，服务器端数据已确认下载和解压，后续主要在服务器上做数据数量确认、重建 `.venv`、跑 Slurm smoke 和正式训练。
+- 当前最新优先级：先在服务器执行数据数量确认和 `SHA256SUMS.txt` 校验结果复核；再重建 `.venv` 并安装 CUDA 12.x 兼容 PyTorch；随后提交 `EPOCHS=2 OUTPUT_DIR=output_crackwarp_slurm/smoke sbatch slurm_train_crackwarp.sbatch`。
 - 补齐训练环境依赖：优先根据当前机器 CUDA 能力安装 PyTorch CUDA 12.x 兼容版本，再通过 `requirements.txt` 安装 `opencv-python-headless`、`scipy`、`tqdm`、`natsort`、`scikit-image` 等依赖。
 - 先做不训练的运行检查：导入模型、加载 `best_epe.pth`、读取少量样本、跑一次小规模推理/评估，确认代码路径、checkpoint 结构和设备可用性。
 - 修正文档与代码不一致：项目文档提到 `infer_epoch80.py`，实际文件为 `infer_epoch.py`。
@@ -90,6 +108,12 @@
 - 在确认环境可跑后，优先做小样本诊断评估和可视化复现，再决定是否进入完整训练或结构改动。
 - 如果需要继续完善对外稿，可根据实际报价策略进一步压缩为一页版、报价单版或合同附件版。
 - 如果需要做 Word 视觉级 QA，需在本机安装可命令行调用的 LibreOffice `soffice`，然后重新渲染检查页面布局。
+- 服务器下一步优先对 `output_crackwarp_slurm/v2/best_epe.pth` 做更完整评估：扩大到全验证集或更多样本，生成 ROI 局部放大图、误差热图、预测位移场和失败样本，避免只根据 120 张样本下结论。
+- 下一轮若继续训练，不建议只沿用相同配置再跑 50 epoch；应先完成预测位移场、ROI 可视化、folding 热区和高误差样本诊断，再决定修改 loss 权重、坐标约束或局部 refinement。
+- 基于 1000 样本公平对比，下一步应优先挑选旧模型优于 v2、v2 优于旧模型、两者都失败的样本各若干张，做可视化归因分析。
+- 将本地新增脚本同步到服务器后，先运行 `utils/compare_eval_per_image.py` 生成三类图片清单，再分别用旧模型和 v2 模型调用 `utils/export_crack_roi_visuals.py --image_list` 导出 ROI 对比图。
+- 对比旧权重与 v2 权重时统一使用当前 `utils/evaluate_metrics.py` 口径，重点比较 crack EPE、global EPE、Dice、edge fidelity 和 folding rate；旧 gate report 的 Dice 口径不应再直接混用。
+- 进入优化前先检查 `infer_epoch.py`、`predict.py`、`utils/evaluate_metrics.py` 中 `cv2.remap` 坐标方向、归一化尺度、`map_x/map_y` 顺序和可视化输出是否完全一致，优先排除恢复量偏小的工程原因。
 
 ## Open Issues
 
@@ -105,6 +129,7 @@
 - 已有 gate report 中 checkpoint 路径仍包含原机器绝对路径 `D:\nxy1\GOOD_cnn_new\GOOD_cnn\...`，后续报告或脚本应避免依赖旧路径。
 - 现有模型虽然训练收敛，但 gate report 全部未达标，核心瓶颈集中在 crack EPE、Dice、edge fidelity 和 folding rate。
 - 当前环境缺少 LibreOffice `soffice`，因此新增 Word 说明稿已完成结构化校验，但未完成页面 PNG 渲染级视觉 QA。
+- 当前本地 Windows 工作区没有可用 `.venv`，因此 2026-06-08 新增的诊断脚本尚未在本地完成 Python 编译检查；需要同步到服务器后使用服务器 `.venv/bin/python` 做 `py_compile` 和实际运行验证。
 
 ## Architecture Decisions
 
