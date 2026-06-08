@@ -61,6 +61,8 @@
 
 2026-06-08 新增 `utils/export_flow_diagnostics.py`，用于服务器下一步继续诊断共同失败样本。该脚本同时加载旧模型和 v2 新模型，对指定图片清单导出整图诊断面板，包含输入、旧模型校正、v2 校正、GT 校正、旧/新 EPE 热图、旧/新 folding 热区和旧/新位移幅度图，并生成 `flow_diagnostics.csv`。该脚本需要在服务器 `.venv/bin/python` 下做语法检查和实际运行，本地 Windows 工作区无 `.venv`，暂不能本地执行验证。
 
+2026-06-08 已拉取服务器提交 `d87f9bb`，包含 `output_crackwarp_slurm/v2/flow_diag_joint_failures/` 的 20 张共同失败样本整图诊断面板和 `flow_diagnostics.csv`。CSV 显示这 20 张样本中 v2 全局 EPE 平均从 129.430 降到 123.972，但裂缝区域 EPE 平均从 176.045 升到 177.491；v2 平均位移幅度从 128.289px 降到 121.280px，说明 v2 更偏保守/平滑，全图指标可能改善，但裂缝主体并未稳定对准。典型样本 `crack0041_07` 中 v2 明显优于旧模型，主要因为旧模型位移幅度过大，而 v2 降低位移后 EPE 大幅下降；典型样本 `crack0063_05` 中 v2 严重劣化，全局 EPE 从 114.437 升到 182.805，裂缝 EPE 从 114.093 升到 208.985，且 v2 位移幅度从 115.780px 增到 182.945px，说明 v2 在部分样本上会产生过强或方向错误的局部恢复。当前判断：问题不是单纯“恢复量太小”，而是恢复幅度缺少结构约束，有时过小、有时过大，且没有稳定服务于裂缝 ROI。
+
 ## Recent Changes
 
 - 新增 `.gitignore`，忽略 `.venv/`、Python 缓存、系统文件和常见编辑器目录。
@@ -99,6 +101,7 @@
 - 2026-06-08 拉取服务器提交 `f6f4645`，完成对 `compare_old_vs_v2` 和共同失败 ROI 图的本地分析；确认 v2 的改进不稳定，主要问题集中在大形变、边界区域和裂缝细节保持。
 - 2026-06-08 新增整图 flow 诊断脚本 `utils/export_flow_diagnostics.py`，为下一步服务器端导出 EPE/folding/位移幅度热图做准备。
 - 2026-06-08 修复 `utils/export_flow_diagnostics.py` 直接运行时找不到根目录模块的问题：脚本启动时显式把项目根目录加入 `sys.path`，以兼容服务器命令 `.venv/bin/python utils/export_flow_diagnostics.py ...`。
+- 2026-06-08 拉取并分析服务器生成的共同失败样本整图 flow 诊断结果；确认 v2 对全图 EPE 有局部改善，但裂缝 ROI EPE 不稳定，恢复幅度存在样本依赖的过小/过大问题。
 
 ## Next TODO
 
@@ -124,6 +127,7 @@
 - 进入优化前先检查 `infer_epoch.py`、`predict.py`、`utils/evaluate_metrics.py` 中 `cv2.remap` 坐标方向、归一化尺度、`map_x/map_y` 顺序和可视化输出是否完全一致，优先排除恢复量偏小的工程原因。
 - 优先针对 `crack0030_xx` 共同失败族做专项诊断：检查合成标签的逆映射场、预测 flow 范围、边界采样、folding 热区和 ROI mask 是否对齐；这组样本可作为下一轮 loss/约束调整的回归测试集。
 - 服务器拉取 `utils/export_flow_diagnostics.py` 后，先对 `joint_failure_images.txt` 导出整图诊断面板；如果 EPE 热图与 folding 热区集中在边界和大形变区域，优先调整 folding/Jacobian 约束和边界采样；如果位移幅度图整体偏小，则优先排查坐标尺度与恢复幅度约束。
+- 下一步需要服务器继续对 `new_better_images.txt` 和 `old_better_images.txt` 分别导出整图 flow 诊断面板，用正反样本确认 v2 改善和退化的共同模式，再决定 loss/结构改动。
 
 ## Open Issues
 
