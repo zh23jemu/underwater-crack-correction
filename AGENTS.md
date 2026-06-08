@@ -77,6 +77,8 @@
 
 2026-06-09 服务器已完成 v2-v3 正反样本 flow 诊断导出：`flow_diag_new_better` 与 `flow_diag_old_better` 各处理 20 张样本，控制台显示 new-better 组大多从 v2 到 v3 稳定降低 global EPE，例如 `crack0038_01` 从 107.428 降到 104.631；old-better 组中多个高难样本进一步变差，例如 `crack0053_03` 从 151.745 升到 159.044、`crack0063_05` 从 182.805 升到 188.962、`crack0076_04` 从 200.138 升到 206.474。下一步需要读取两组 `flow_diagnostics.csv` 的位移幅度、crack EPE 和 folding 均值，确认 v3 变差样本是否来自位移幅度继续偏大、方向错误或边界 folding。
 
+2026-06-09 已拉取服务器提交 `5b9ca78` 并分析 v2-v3 flow 诊断 CSV/图片。`flow_diag_new_better` 20 张中，v3 相比 v2 的 global EPE 平均从 112.420 降到 110.474，crack EPE 从 116.845 降到 113.667，mean displacement magnitude 从 109.689px 降到 107.996px，p95 displacement magnitude 从 214.854px 降到 212.139px，folding rate 从 0.392338 小升到 0.393053。`flow_diag_old_better` 20 张中，v3 的 global EPE 从 136.226 升到 139.193，crack EPE 从 126.328 升到 134.865，mean displacement magnitude 从 136.213px 升到 139.161px，p95 displacement magnitude 从 247.489px 升到 251.113px，folding rate 从 0.398417 升到 0.400513。代表性图片 `crack0038_01` 显示 v3 通过收缩位移幅度降低 EPE；`crack0053_03`、`crack0079_09`、`crack0100_09` 显示退化样本主要是右侧/边界大形变区域位移幅度进一步变强，导致 EPE 热区更重。当前判断：v3 的 `w_crack_mag=0.1` 不是稳定边缘复原方案，而是一个位移幅度校准信号；它对“v2 位移偏大”的样本有效，但仍会把部分高难样本推向更大恢复幅度，后续应先做更保守的权重或位移幅度上限/鲁棒化约束。
+
 ## Recent Changes
 
 - 新增 `.gitignore`，忽略 `.venv/`、Python 缓存、系统文件和常见编辑器目录。
@@ -122,6 +124,7 @@
 - 2026-06-09 记录 v3 fine-tune smoke 结果：从 v2 checkpoint 初始化、`W_CRACK_MAG=0.1`、`LR=5e-6`、2 epoch 训练链路正常，120 样本指标较 v2 有小幅改善且 folding 未爆炸。
 - 2026-06-09 拉取服务器提交 `63a0971`，同步 `output_crackwarp_slurm/v3_mag_ft_smoke/eval_best_epe_1000/` 与 `compare_v2_vs_v3_ft/`，确认 v3 fine-tune 在 1000 样本上综合优于 v2，但 edge fidelity 仍小幅下降。
 - 2026-06-09 根据服务器控制台输出记录 v2-v3 正反样本 flow 诊断已生成；尚需将 `flow_diag_new_better/` 与 `flow_diag_old_better/` 的 CSV 和图片同步回本地后做完整归因分析。
+- 2026-06-09 拉取服务器提交 `5b9ca78`，完成 v2-v3 正反样本 flow 诊断 CSV 和代表性图片分析；确认 v3 变好组主要伴随位移幅度下降，变差组主要伴随位移幅度和 folding 小幅上升。
 
 ## Next TODO
 
@@ -150,6 +153,7 @@
 - 下一步需要服务器继续对 `new_better_images.txt` 和 `old_better_images.txt` 分别导出整图 flow 诊断面板，用正反样本确认 v2 改善和退化的共同模式，再决定 loss/结构改动。
 - 下一步服务器优先导出 v2-v3 的正反样本 flow 诊断图：分别使用 `output_crackwarp_slurm/v3_mag_ft_smoke/compare_v2_vs_v3_ft/new_better_images.txt` 和 `old_better_images.txt`，对比 v2 `best_epe.pth` 与 v3 `best_epe.pth` 的位移幅度、EPE 热图和 folding 热区。
 - 下一步服务器先汇总 `flow_diag_new_better/flow_diagnostics.csv` 与 `flow_diag_old_better/flow_diagnostics.csv` 的均值差异，重点看 global/crack EPE、folding rate、mean/p95 displacement magnitude，再决定是否提交 10 epoch fine-tune。
+- 不建议直接按当前 `W_CRACK_MAG=0.1` 跑长训 50 epoch；如果继续小规模训练，优先做更保守的 10 epoch 对照，例如 `W_CRACK_MAG=0.05` 或保留 `W_CRACK_MAG=0.1` 但增加位移幅度鲁棒项/上限项，防止高难样本的 p95 displacement magnitude 继续上升。
 - 如果 v2-v3 flow 诊断确认 v3 主要是在校准位移幅度且没有引入新的边界折叠，再提交 10 epoch 小规模 fine-tune：`INIT_CHECKPOINT=output_crackwarp_slurm/v2/best_epe.pth W_CRACK_MAG=0.1 LR=5e-6 EPOCHS=10 OUTPUT_DIR=output_crackwarp_slurm/v3_mag_ft_10ep sbatch --partition=gpu --time=24:00:00 slurm_train_crackwarp.sbatch`。
 - v3 后续优化不能只依赖 `w_crack_mag`；需要同步补强 edge fidelity，例如提高边缘保持项、检查 ROI 边缘 mask 对齐，或增加裂缝边缘/梯度一致性消融，否则指标会继续出现 EPE 改善但视觉边缘变差的问题。
 
