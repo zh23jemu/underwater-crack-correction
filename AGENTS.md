@@ -26,6 +26,7 @@
 - `utils/evaluate_metrics.py` 与 `utils/checkpoint_gate_report.py`：裂缝中心指标评估和 checkpoint 门限诊断。
 - `utils/compare_eval_per_image.py`：对比新旧模型 `eval_per_image.csv`，自动挑选新模型更好、旧模型更好和共同失败的诊断样本，并输出图片清单。
 - `utils/export_crack_roi_visuals.py`：裂缝 ROI 可视化导出脚本，现已支持 `--image_list`，可按诊断样本清单批量出局部放大图。
+- `utils/export_flow_diagnostics.py`：整图 flow 诊断脚本，用于同批样本的新旧模型对比，导出校正图、EPE 热图、folding 热区、位移幅度图和逐图诊断 CSV。
 - `under-crack-images/images/`：原始真实裂缝图，共 1,037 张 `.jpg`。
 - `underwater_crack_v3/`：主合成训练集，共 10,360 张 `.png` 与 10,360 个 `.png.npy` 标签，`manifest.json` 记录 `samples_per_image=10` 与 `total_generated=10360`。
 - `output_crackwarp/`：已有训练输出，包含 `train.log`、13 个 `.pth` checkpoint、评估 CSV/JSON、gate report 和可视化结果。
@@ -55,6 +56,10 @@
 2026-06-08 继续补评 `output_crackwarp_slurm/v2/best_crack_epe.pth` 与 `best_loss.pth`，两者在 120 样本上的评估结果与 `best_epe.pth` 完全一致，说明本轮训练中三个 best 权重很可能对应同一保存时刻或同一 epoch。随后对 `best_epe.pth` 扩大到 1000 样本评估，结果为 crack EPE 113.286263、global EPE 113.095718、crack Dice 0.255906、crack edge fidelity 0.204312、global edge fidelity 0.224700、folding rate 0.590347。该结果比 120 样本更差，说明 120 样本评估偏乐观；后续报告和模型判断应优先采用更大样本或固定验证集指标。
 
 2026-06-08 进一步用同一 1000 样本口径复评历史 `output_crackwarp/best_epe.pth`，结果为 crack EPE 116.231331、global EPE 114.404533、crack Dice 0.252041、crack edge fidelity 0.218584、global edge fidelity 0.242924、folding rate 0.569224。与 v2 相比，v2 的 crack/global EPE 和 Dice 小幅更好，但 edge fidelity 与 folding rate 更差。因此 v2 的真实结论是“位置误差略有改善，但裂缝边缘复原和位移场可逆性没有改善”，不适合作为最终达标模型。
+
+2026-06-08 已从服务器拉取 `f6f4645` 诊断结果，包含 `output_crackwarp_slurm/v2/compare_old_vs_v2/` 和共同失败样本的新旧 ROI 图。`compare_summary.json` 显示 1000 张匹配样本中 v2 综合分更好的有 523 张，旧模型更好的有 477 张，说明 v2 不是稳定全面提升，而是接近五五开的局部改善。共同失败样本高度集中在 `crack0030_xx` 一组，ROI 图显示大形变和边界附近存在明显局部涂抹、重复纹理、不自然边缘和裂缝主体偏移；例如 `crack0030_08`、`crack0030_02`、`crack0063_05` 中 v2 虽然部分纹理位置有变化，但裂缝细节没有稳定复原，部分样本反而抹淡或拉偏。该诊断进一步支持下一步应先修正/增强坐标约束、folding/Jacobian 约束、边缘保持和 ROI 局部监督，而不是继续同配置堆训练轮数。
+
+2026-06-08 新增 `utils/export_flow_diagnostics.py`，用于服务器下一步继续诊断共同失败样本。该脚本同时加载旧模型和 v2 新模型，对指定图片清单导出整图诊断面板，包含输入、旧模型校正、v2 校正、GT 校正、旧/新 EPE 热图、旧/新 folding 热区和旧/新位移幅度图，并生成 `flow_diagnostics.csv`。该脚本需要在服务器 `.venv/bin/python` 下做语法检查和实际运行，本地 Windows 工作区无 `.venv`，暂不能本地执行验证。
 
 ## Recent Changes
 
@@ -91,6 +96,8 @@
 - 2026-06-08 追加评估 `best_crack_epe.pth`、`best_loss.pth` 和 `best_epe.pth` 的 1000 样本结果；确认三个 best checkpoint 在 120 样本上指标一致，且 1000 样本评估显示泛化指标回落。
 - 2026-06-08 追加旧模型 `output_crackwarp/best_epe.pth` 的 1000 样本复评，确认 v2 相比旧模型只是 EPE/Dice 小幅改善，edge/folding 指标退化。
 - 2026-06-08 新增 `utils/compare_eval_per_image.py`，用于从新旧模型逐图评估结果中挑选诊断样本；同时更新 `utils/export_crack_roi_visuals.py`，支持通过 `--image_list` 只导出指定样本的 ROI 可视化。
+- 2026-06-08 拉取服务器提交 `f6f4645`，完成对 `compare_old_vs_v2` 和共同失败 ROI 图的本地分析；确认 v2 的改进不稳定，主要问题集中在大形变、边界区域和裂缝细节保持。
+- 2026-06-08 新增整图 flow 诊断脚本 `utils/export_flow_diagnostics.py`，为下一步服务器端导出 EPE/folding/位移幅度热图做准备。
 
 ## Next TODO
 
@@ -114,6 +121,8 @@
 - 将本地新增脚本同步到服务器后，先运行 `utils/compare_eval_per_image.py` 生成三类图片清单，再分别用旧模型和 v2 模型调用 `utils/export_crack_roi_visuals.py --image_list` 导出 ROI 对比图。
 - 对比旧权重与 v2 权重时统一使用当前 `utils/evaluate_metrics.py` 口径，重点比较 crack EPE、global EPE、Dice、edge fidelity 和 folding rate；旧 gate report 的 Dice 口径不应再直接混用。
 - 进入优化前先检查 `infer_epoch.py`、`predict.py`、`utils/evaluate_metrics.py` 中 `cv2.remap` 坐标方向、归一化尺度、`map_x/map_y` 顺序和可视化输出是否完全一致，优先排除恢复量偏小的工程原因。
+- 优先针对 `crack0030_xx` 共同失败族做专项诊断：检查合成标签的逆映射场、预测 flow 范围、边界采样、folding 热区和 ROI mask 是否对齐；这组样本可作为下一轮 loss/约束调整的回归测试集。
+- 服务器拉取 `utils/export_flow_diagnostics.py` 后，先对 `joint_failure_images.txt` 导出整图诊断面板；如果 EPE 热图与 folding 热区集中在边界和大形变区域，优先调整 folding/Jacobian 约束和边界采样；如果位移幅度图整体偏小，则优先排查坐标尺度与恢复幅度约束。
 
 ## Open Issues
 
