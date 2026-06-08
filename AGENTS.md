@@ -73,6 +73,10 @@
 
 2026-06-09 服务器已完成 v3 fine-tune smoke：`INIT_CHECKPOINT=output_crackwarp_slurm/v2/best_epe.pth W_CRACK_MAG=0.1 LR=5e-6 EPOCHS=2 OUTPUT_DIR=output_crackwarp_slurm/v3_mag_ft_smoke sbatch --partition=gpuHz --time=02:00:00 slurm_train_crackwarp.sbatch`。日志确认已加载 v2 checkpoint，`c_mag` 正常出现，`.err` 为空。120 样本评估结果为 crack EPE 107.956345、crack edge fidelity 0.306520、Dice 0.284974、global EPE 109.795090、global edge fidelity 0.293271、folding rate 0.589715。相较 v2 的 120 样本结果，crack/global EPE 与 Dice 小幅改善，folding 略好，edge 基本持平略低，说明从 v2 初始化后开启 `w_crack_mag=0.1` 是可继续验证的方向；下一步应做 1000 样本评估和 v2-v3 逐图对比，不能直接扩大到 50 epoch。
 
+2026-06-09 已拉取服务器提交 `63a0971`，包含 v3 fine-tune 的 1000 样本评估和 v2-v3 逐图对比结果。v3 1000 样本结果为 crack EPE 112.940239、global EPE 111.840080、Dice 0.259461、crack edge fidelity 0.200950、global edge fidelity 0.221410、folding rate 0.589862。相比 v2 1000 样本结果，v3 的 crack EPE 改善约 0.346px，global EPE 改善约 1.256px，Dice 提升约 0.00355，folding rate 改善约 0.00048，但 crack/global edge fidelity 分别下降约 0.00336/0.00329。逐图综合评分显示 1000 张中 v3 优于 v2 的有 644 张，劣于 v2 的有 356 张，平均综合分提升 1.017554。当前结论：`w_crack_mag=0.1` 微调方向有效，能更稳定地校准位移幅度，但边缘保持仍未改善，下一步应先做 v2-v3 正反样本 flow 诊断，再考虑 10 epoch 小规模 fine-tune，而不是直接长训 50 epoch。
+
+2026-06-09 服务器已完成 v2-v3 正反样本 flow 诊断导出：`flow_diag_new_better` 与 `flow_diag_old_better` 各处理 20 张样本，控制台显示 new-better 组大多从 v2 到 v3 稳定降低 global EPE，例如 `crack0038_01` 从 107.428 降到 104.631；old-better 组中多个高难样本进一步变差，例如 `crack0053_03` 从 151.745 升到 159.044、`crack0063_05` 从 182.805 升到 188.962、`crack0076_04` 从 200.138 升到 206.474。下一步需要读取两组 `flow_diagnostics.csv` 的位移幅度、crack EPE 和 folding 均值，确认 v3 变差样本是否来自位移幅度继续偏大、方向错误或边界 folding。
+
 ## Recent Changes
 
 - 新增 `.gitignore`，忽略 `.venv/`、Python 缓存、系统文件和常见编辑器目录。
@@ -116,6 +120,8 @@
 - 2026-06-08 新增可开关的裂缝 ROI 位移幅度一致性损失 `w_crack_mag`，默认关闭；Slurm 脚本支持用 `W_CRACK_MAG` 环境变量打开。
 - 2026-06-08 根据服务器 v3 从零 smoke 结果修正策略：新增 `INIT_CHECKPOINT` 微调入口，避免新 loss 从随机初始化阶段主导不稳定位移场。
 - 2026-06-09 记录 v3 fine-tune smoke 结果：从 v2 checkpoint 初始化、`W_CRACK_MAG=0.1`、`LR=5e-6`、2 epoch 训练链路正常，120 样本指标较 v2 有小幅改善且 folding 未爆炸。
+- 2026-06-09 拉取服务器提交 `63a0971`，同步 `output_crackwarp_slurm/v3_mag_ft_smoke/eval_best_epe_1000/` 与 `compare_v2_vs_v3_ft/`，确认 v3 fine-tune 在 1000 样本上综合优于 v2，但 edge fidelity 仍小幅下降。
+- 2026-06-09 根据服务器控制台输出记录 v2-v3 正反样本 flow 诊断已生成；尚需将 `flow_diag_new_better/` 与 `flow_diag_old_better/` 的 CSV 和图片同步回本地后做完整归因分析。
 
 ## Next TODO
 
@@ -142,9 +148,10 @@
 - 优先针对 `crack0030_xx` 共同失败族做专项诊断：检查合成标签的逆映射场、预测 flow 范围、边界采样、folding 热区和 ROI mask 是否对齐；这组样本可作为下一轮 loss/约束调整的回归测试集。
 - 服务器拉取 `utils/export_flow_diagnostics.py` 后，先对 `joint_failure_images.txt` 导出整图诊断面板；如果 EPE 热图与 folding 热区集中在边界和大形变区域，优先调整 folding/Jacobian 约束和边界采样；如果位移幅度图整体偏小，则优先排查坐标尺度与恢复幅度约束。
 - 下一步需要服务器继续对 `new_better_images.txt` 和 `old_better_images.txt` 分别导出整图 flow 诊断面板，用正反样本确认 v2 改善和退化的共同模式，再决定 loss/结构改动。
-- 下一步服务器需先做语法检查和短训 smoke：`W_CRACK_MAG=0.3 EPOCHS=2 OUTPUT_DIR=output_crackwarp_slurm/v3_mag_smoke sbatch --partition=gpuHz --time=01:00:00 slurm_train_crackwarp.sbatch`。若 smoke 正常且 120 样本评估没有明显退化，再考虑 20-50 epoch v3 正式训练。
-- 下一步服务器应改跑 fine-tune smoke，而不是从零训练：`INIT_CHECKPOINT=output_crackwarp_slurm/v2/best_epe.pth W_CRACK_MAG=0.1 LR=5e-6 EPOCHS=2 OUTPUT_DIR=output_crackwarp_slurm/v3_mag_ft_smoke sbatch --partition=gpuHz --time=02:00:00 slurm_train_crackwarp.sbatch`。重点观察日志是否出现 `Loaded initial checkpoint`、`c_mag`，以及 120 样本指标是否接近或优于 v2。
-- 下一步服务器需要对 `output_crackwarp_slurm/v3_mag_ft_smoke/best_epe.pth` 跑 1000 样本评估，并与 v2 的 1000 样本结果做逐图对比；如果 1000 样本仍有改善，再导出 v2-v3 的正反样本 flow 诊断图。
+- 下一步服务器优先导出 v2-v3 的正反样本 flow 诊断图：分别使用 `output_crackwarp_slurm/v3_mag_ft_smoke/compare_v2_vs_v3_ft/new_better_images.txt` 和 `old_better_images.txt`，对比 v2 `best_epe.pth` 与 v3 `best_epe.pth` 的位移幅度、EPE 热图和 folding 热区。
+- 下一步服务器先汇总 `flow_diag_new_better/flow_diagnostics.csv` 与 `flow_diag_old_better/flow_diagnostics.csv` 的均值差异，重点看 global/crack EPE、folding rate、mean/p95 displacement magnitude，再决定是否提交 10 epoch fine-tune。
+- 如果 v2-v3 flow 诊断确认 v3 主要是在校准位移幅度且没有引入新的边界折叠，再提交 10 epoch 小规模 fine-tune：`INIT_CHECKPOINT=output_crackwarp_slurm/v2/best_epe.pth W_CRACK_MAG=0.1 LR=5e-6 EPOCHS=10 OUTPUT_DIR=output_crackwarp_slurm/v3_mag_ft_10ep sbatch --partition=gpu --time=24:00:00 slurm_train_crackwarp.sbatch`。
+- v3 后续优化不能只依赖 `w_crack_mag`；需要同步补强 edge fidelity，例如提高边缘保持项、检查 ROI 边缘 mask 对齐，或增加裂缝边缘/梯度一致性消融，否则指标会继续出现 EPE 改善但视觉边缘变差的问题。
 
 ## Open Issues
 
@@ -161,6 +168,7 @@
 - 现有模型虽然训练收敛，但 gate report 全部未达标，核心瓶颈集中在 crack EPE、Dice、edge fidelity 和 folding rate。
 - 当前环境缺少 LibreOffice `soffice`，因此新增 Word 说明稿已完成结构化校验，但未完成页面 PNG 渲染级视觉 QA。
 - 当前本地 Windows 工作区没有可用 `.venv`，因此 2026-06-08 新增的诊断脚本尚未在本地完成 Python 编译检查；需要同步到服务器后使用服务器 `.venv/bin/python` 做 `py_compile` 和实际运行验证。
+- v3 fine-tune 在 1000 样本上虽比 v2 更稳，但改善幅度仍较小，且 edge fidelity 继续下降；当前只能证明位移幅度一致性损失有进一步实验价值，不能证明已经接近三区论文或工程验收水平。
 
 ## Architecture Decisions
 
