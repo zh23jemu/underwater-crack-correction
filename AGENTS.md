@@ -85,6 +85,8 @@
 
 2026-06-09 已完成下一步代码修改：`DisplacementMagnitudeConsistencyLoss` 新增 `crack_mag_robust_delta` 和 `crack_mag_over_weight`，用于对位移幅度一致性做 Huber 式鲁棒化，并额外惩罚预测位移幅度超过 GT 的部分，降低高难样本 p95 displacement magnitude 被继续推大的风险；新增 `WarpedImageGradientConsistencyLoss`，通过预测校正图与 GT 校正图的灰度梯度差异，在 GT 校正后的裂缝 ROI 附近约束边缘结构。新增参数默认均为 0，保持历史配置不变；Slurm 包装入口已支持 `W_CRACK_EDGE`、`CRACK_MAG_ROBUST_DELTA`、`CRACK_MAG_OVER_WEIGHT` 环境变量。下一步需在服务器 `.venv/bin/python` 下做 `py_compile` 和 2 epoch smoke，本地 Windows 工作区无 `.venv`，未进行 Python 编译验证。
 
+2026-06-09 服务器完成 v4 robust+edge smoke：从 `v3_mag_ft_w005_10ep/best_epe.pth` 初始化，使用 `W_CRACK_MAG=0.05`、`CRACK_MAG_ROBUST_DELTA=0.01`、`CRACK_MAG_OVER_WEIGHT=0.5`、`W_CRACK_EDGE=0.05`、`LR=3e-6`、2 epoch，输出 `output_crackwarp_slurm/v4_robust_edge_smoke`。1000 样本结果为 crack EPE 111.473701、global EPE 110.564407、Dice 0.261134、crack edge fidelity 0.205674、global edge fidelity 0.228518、folding rate 0.585879。相比 `w005_10ep`，crack/global EPE、Dice、crack/global edge 和 folding 全部改善；逐图综合评分 631 张优于 `w005_10ep`、369 张劣于 `w005_10ep`，平均综合分提升 0.698709。top 改善样本包含此前退化严重的 `crack0063_07`、`crack0063_05`、`crack0079_09`、`crack0052_00`，说明鲁棒位移和边缘一致性约束确实压住了一部分大形变退化；剩余 top 退化样本较分散，主要表现为 crack EPE/Dice 局部波动和少量 edge 下降，而非系统性 folding 崩坏。当前判断：v4 方向成立，下一步可从 v4 smoke checkpoint 继续做 8-10 epoch 小规模训练，或保守地微调 `W_CRACK_EDGE` 后做对照。
+
 ## Recent Changes
 
 - 新增 `.gitignore`，忽略 `.venv/`、Python 缓存、系统文件和常见编辑器目录。
@@ -134,6 +136,7 @@
 - 2026-06-09 拉取服务器提交 `3346ffd`，完成 `v3_mag_ft_w005_10ep` 的 1000 样本结果和逐图对比分析；确认该版本较 v2 和 `W_CRACK_MAG=0.1` smoke 更稳定，是当前主线候选。
 - 2026-06-09 拉取服务器提交 `c200b54`，完成 `v3_mag_ft_w005_10ep` 退化样本和共同失败样本 flow 诊断；确认剩余失败主要集中在裂缝 ROI 的局部位移过强、folding 增加和边缘对齐不足。
 - 2026-06-09 修改 `loss_crack.py`、`train_v2.py`、`run_train_slurm.py`、`slurm_train_crackwarp.sbatch` 和 `config_crack.py`，接入鲁棒位移幅度约束、过大位移惩罚和裂缝 ROI 校正图边缘一致性损失；默认关闭以保持历史结果可复现。
+- 2026-06-09 拉取服务器提交 `2c37686`，分析 `v4_robust_edge_smoke` 的 120/1000 样本评估和与 `w005_10ep` 的逐图对比；确认 v4 在 EPE、Dice、edge fidelity 和 folding 上均进一步改善。
 
 ## Next TODO
 
@@ -169,6 +172,8 @@
 - 服务器 pull 新代码后先执行语法检查：`.venv/bin/python -m py_compile loss_crack.py train_v2.py run_train_slurm.py utils/evaluate_metrics.py`。
 - 语法检查通过后建议先跑 2 epoch smoke：`INIT_CHECKPOINT=output_crackwarp_slurm/v3_mag_ft_w005_10ep/best_epe.pth W_CRACK_MAG=0.05 CRACK_MAG_ROBUST_DELTA=0.01 CRACK_MAG_OVER_WEIGHT=0.5 W_CRACK_EDGE=0.05 LR=3e-6 EPOCHS=2 OUTPUT_DIR=output_crackwarp_slurm/v4_robust_edge_smoke sbatch --partition=gpuHz --time=02:00:00 slurm_train_crackwarp.sbatch`。
 - smoke 日志中需要确认 `c_mag` 和 `c_edge` 正常出现；若 120 样本评估没有明显退化，再做 1000 样本评估和 v3_w005 对比。
+- v4 smoke 已证明方向成立。下一步优先跑 8-10 epoch 延长训练：从 `output_crackwarp_slurm/v4_robust_edge_smoke/best_epe.pth` 初始化，保持 `W_CRACK_MAG=0.05`、`CRACK_MAG_ROBUST_DELTA=0.01`、`CRACK_MAG_OVER_WEIGHT=0.5`、`W_CRACK_EDGE=0.05`，学习率可继续用 `LR=3e-6`，输出到 `output_crackwarp_slurm/v4_robust_edge_10ep`。
+- 若 10 epoch 后 edge 提升但 crack EPE 波动增大，可做 `W_CRACK_EDGE=0.03` 的对照；若 EPE 和 folding 继续改善，则 v4 可作为后续对比实验和消融实验的主模型版本。
 - 如果 v2-v3 flow 诊断确认 v3 主要是在校准位移幅度且没有引入新的边界折叠，再提交 10 epoch 小规模 fine-tune：`INIT_CHECKPOINT=output_crackwarp_slurm/v2/best_epe.pth W_CRACK_MAG=0.1 LR=5e-6 EPOCHS=10 OUTPUT_DIR=output_crackwarp_slurm/v3_mag_ft_10ep sbatch --partition=gpu --time=24:00:00 slurm_train_crackwarp.sbatch`。
 - v3 后续优化不能只依赖 `w_crack_mag`；需要同步补强 edge fidelity，例如提高边缘保持项、检查 ROI 边缘 mask 对齐，或增加裂缝边缘/梯度一致性消融，否则指标会继续出现 EPE 改善但视觉边缘变差的问题。
 
