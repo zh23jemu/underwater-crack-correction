@@ -1,0 +1,9 @@
+{
+  "old_csv": "output_crackwarp_slurm/v3_mag_ft_w005_10ep/eval_best_epe_1000/eval_per_image.csv",
+  "new_csv": "output_crackwarp_slurm/v4_robust_edge_smoke/eval_best_epe_1000/eval_per_image.csv",
+  "matched_images": 1000,
+  "topk": 20,
+  "mean_score_new_minus_old": 0.6987086154699318,
+  "num_new_score_positive": 631,
+  "num_new_score_negative": 369
+}
