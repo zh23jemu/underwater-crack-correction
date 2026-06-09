@@ -255,9 +255,11 @@ class DisplacementMagnitudeConsistencyLoss(nn.Module):
     让幅度校准服务于裂缝主体复原。
     """
 
-    def __init__(self, eps=1e-6):
+    def __init__(self, eps=1e-6, robust_delta=0.0, over_weight=0.0):
         super().__init__()
         self.eps = eps
+        self.robust_delta = float(robust_delta)
+        self.over_weight = float(over_weight)
 
     @staticmethod
     def _identity_like(flow):
@@ -270,14 +272,88 @@ class DisplacementMagnitudeConsistencyLoss(nn.Module):
         )
         return torch.stack([xs, ys], dim=0).unsqueeze(0).expand(flow.shape[0], -1, -1, -1)
 
+    def _robust_abs(self, diff):
+        """
+        对幅度差做可选的 Huber/Charbonnier 鲁棒化。
+
+        服务器诊断显示，少数高难样本会把 p95 位移继续推大，若直接使用普通
+        Charbonnier，极端样本仍可能持续主导梯度。设置 robust_delta 后，大误差
+        区域切换为线性惩罚，能降低异常样本对整体训练方向的牵引。
+        """
+        abs_diff = diff.abs()
+        if self.robust_delta > 0:
+            delta = torch.as_tensor(self.robust_delta, dtype=diff.dtype, device=diff.device)
+            return torch.where(
+                abs_diff < delta,
+                0.5 * abs_diff * abs_diff / delta,
+                abs_diff - 0.5 * delta,
+            )
+        return torch.sqrt(diff * diff + self.eps)
+
+    @staticmethod
+    def _masked_mean(loss, mask):
+        if mask is not None:
+            return (loss * mask).sum() / mask.sum().clamp_min(1.0)
+        return loss.mean()
+
     def forward(self, pred, target, mask=None):
         ident = self._identity_like(pred)
         pred_mag = torch.sqrt(((pred - ident) ** 2).sum(dim=1, keepdim=True) + self.eps)
         target_mag = torch.sqrt(((target - ident) ** 2).sum(dim=1, keepdim=True) + self.eps)
-        diff = torch.sqrt((pred_mag - target_mag) ** 2 + self.eps)
-        if mask is not None:
-            return (diff * mask).sum() / mask.sum().clamp_min(1.0)
-        return diff.mean()
+        base = self._robust_abs(pred_mag - target_mag)
+        loss = self._masked_mean(base, mask)
+
+        if self.over_weight > 0:
+            # 只对“预测恢复幅度超过 GT”的部分加额外惩罚，针对当前退化样本中
+            # p95 displacement magnitude 被推大的问题；不会惩罚保守但方向正确的样本。
+            over = self._robust_abs((pred_mag - target_mag).clamp_min(0.0))
+            loss = loss + self.over_weight * self._masked_mean(over, mask)
+        return loss
+
+
+class WarpedImageGradientConsistencyLoss(nn.Module):
+    """
+    裂缝 ROI 校正图边缘一致性损失。
+
+    现有 `crack_grad` 约束的是坐标场梯度，但 1000 样本评估显示 edge fidelity
+    仍偏低，说明只让 flow 平滑/接近 GT 还不够。这里比较“预测校正图”和
+    “GT 校正图”的灰度梯度幅度，并用 GT 校正后的裂缝 soft mask 聚焦裂缝附近，
+    让训练直接对齐裂缝边缘和细分叉的视觉结构。
+    """
+
+    def __init__(self, eps=1e-3, mask_dilate=3):
+        super().__init__()
+        self.eps = eps
+        self.mask_dilate = int(mask_dilate)
+
+    @staticmethod
+    def _gray(img):
+        return 0.299 * img[:, 0:1] + 0.587 * img[:, 1:2] + 0.114 * img[:, 2:3]
+
+    @staticmethod
+    def _grad_mag(gray):
+        dx = gray[:, :, :, 1:] - gray[:, :, :, :-1]
+        dy = gray[:, :, 1:, :] - gray[:, :, :-1, :]
+        dx = F.pad(dx, (0, 1, 0, 0), mode='replicate')
+        dy = F.pad(dy, (0, 0, 0, 1), mode='replicate')
+        return torch.sqrt(dx * dx + dy * dy + 1e-8)
+
+    def forward(self, pred_flow, gt_flow, img, crack_mask):
+        pred_img = F.grid_sample(
+            img, flow_to_grid(pred_flow), mode='bilinear', padding_mode='border', align_corners=True
+        )
+        with torch.no_grad():
+            gt_grid = flow_to_grid(gt_flow)
+            gt_img = F.grid_sample(img, gt_grid, mode='bilinear', padding_mode='border', align_corners=True)
+            roi = F.grid_sample(crack_mask, gt_grid, mode='bilinear', padding_mode='border', align_corners=True)
+            if self.mask_dilate > 1:
+                roi = F.max_pool2d(roi, kernel_size=self.mask_dilate, stride=1, padding=self.mask_dilate // 2)
+            roi = roi.clamp(0.0, 1.0).detach()
+
+        pred_grad = self._grad_mag(self._gray(pred_img))
+        gt_grad = self._grad_mag(self._gray(gt_img))
+        diff = torch.sqrt((pred_grad - gt_grad) ** 2 + self.eps ** 2)
+        return (diff * roi).sum() / roi.sum().clamp_min(1.0)
 
 
 class CrackWarpLoss(nn.Module):
@@ -295,6 +371,9 @@ class CrackWarpLoss(nn.Module):
         w_crack_grad=0.25,
         w_crack_freq=0.15,
         w_crack_mag=0.0,
+        w_crack_edge=0.0,
+        crack_mag_robust_delta=0.0,
+        crack_mag_over_weight=0.0,
         crack_boost=8.0,
         crack_topk=0.08,
         crack_smooth_factor=0.25,
@@ -312,6 +391,7 @@ class CrackWarpLoss(nn.Module):
         self.w_crack_grad = w_crack_grad
         self.w_crack_freq = w_crack_freq
         self.w_crack_mag = w_crack_mag
+        self.w_crack_edge = w_crack_edge
         self.crack_boost = crack_boost
         self.crack_smooth_factor = crack_smooth_factor
 
@@ -323,7 +403,12 @@ class CrackWarpLoss(nn.Module):
 
         self.crack_masker = CrackMaskEstimator(topk=crack_topk)
         self.grad_consistency = FlowGradientConsistencyLoss(eps=charbonnier_eps)
-        self.mag_consistency = DisplacementMagnitudeConsistencyLoss(eps=charbonnier_eps)
+        self.mag_consistency = DisplacementMagnitudeConsistencyLoss(
+            eps=charbonnier_eps,
+            robust_delta=crack_mag_robust_delta,
+            over_weight=crack_mag_over_weight,
+        )
+        self.edge_consistency = WarpedImageGradientConsistencyLoss(eps=charbonnier_eps)
 
     def _weighted_charbonnier(self, pred, target, weight):
         diff = torch.sqrt((pred - target) ** 2 + self.char_loss.eps ** 2)
@@ -388,6 +473,10 @@ class CrackWarpLoss(nn.Module):
             crack_grad = self.grad_consistency(final_flow, lbl_full, crack_mask)
             crack_freq = self.freq_loss(final_flow * crack_mask, lbl_full * crack_mask)
             crack_mag = self.mag_consistency(final_flow, lbl_full, crack_mask)
+            if self.w_crack_edge > 0:
+                crack_edge = self.edge_consistency(final_flow, lbl_full, img_full, crack_mask)
+            else:
+                crack_edge = final_flow.new_zeros(())
             crack_ratio = crack_mask.mean()
         else:
             zero = final_flow.new_zeros(())
@@ -395,6 +484,7 @@ class CrackWarpLoss(nn.Module):
             crack_grad = zero
             crack_freq = zero
             crack_mag = zero
+            crack_edge = zero
             crack_ratio = zero
 
         total = (
@@ -407,6 +497,7 @@ class CrackWarpLoss(nn.Module):
             + self.w_crack_grad * crack_grad
             + self.w_crack_freq * crack_freq
             + self.w_crack_mag * crack_mag
+            + self.w_crack_edge * crack_edge
         )
 
         loss_dict = {
@@ -420,6 +511,7 @@ class CrackWarpLoss(nn.Module):
             'crack_grad': crack_grad.item(),
             'crack_freq': crack_freq.item(),
             'crack_mag': crack_mag.item(),
+            'crack_edge': crack_edge.item(),
             'crack_ratio': crack_ratio.item(),
         }
         return total, loss_dict

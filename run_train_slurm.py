@@ -63,6 +63,24 @@ def parse_args() -> argparse.Namespace:
         help="裂缝区域位移幅度一致性损失权重；默认 0 表示关闭。",
     )
     parser.add_argument(
+        "--w-crack-edge",
+        type=float,
+        default=getattr(config, "w_crack_edge", 0.0),
+        help="裂缝 ROI 校正图边缘一致性损失权重；默认 0 表示关闭。",
+    )
+    parser.add_argument(
+        "--crack-mag-robust-delta",
+        type=float,
+        default=getattr(config, "crack_mag_robust_delta", 0.0),
+        help="位移幅度一致性的 Huber 阈值；0 表示沿用普通 Charbonnier。",
+    )
+    parser.add_argument(
+        "--crack-mag-over-weight",
+        type=float,
+        default=getattr(config, "crack_mag_over_weight", 0.0),
+        help="预测位移幅度超过 GT 时的额外惩罚权重；0 表示关闭。",
+    )
+    parser.add_argument(
         "--init-checkpoint",
         default=getattr(config, "init_checkpoint", ""),
         help="可选：从已有模型权重初始化本次训练，适合 loss 小改动 fine-tune。",
@@ -96,6 +114,9 @@ def main() -> None:
     config.accum_steps = args.accum_steps
     config.lr = args.lr
     config.w_crack_mag = args.w_crack_mag
+    config.w_crack_edge = args.w_crack_edge
+    config.crack_mag_robust_delta = args.crack_mag_robust_delta
+    config.crack_mag_over_weight = args.crack_mag_over_weight
     config.init_checkpoint = args.init_checkpoint
     config.gpu_id = args.gpu_id
 
@@ -111,6 +132,9 @@ def main() -> None:
     print("[Slurm wrapper] accum_steps =", config.accum_steps)
     print("[Slurm wrapper] lr =", config.lr)
     print("[Slurm wrapper] w_crack_mag =", config.w_crack_mag)
+    print("[Slurm wrapper] w_crack_edge =", config.w_crack_edge)
+    print("[Slurm wrapper] crack_mag_robust_delta =", config.crack_mag_robust_delta)
+    print("[Slurm wrapper] crack_mag_over_weight =", config.crack_mag_over_weight)
     print("[Slurm wrapper] init_checkpoint =", config.init_checkpoint)
     print("[Slurm wrapper] restart_training =", config.restart_training)
 

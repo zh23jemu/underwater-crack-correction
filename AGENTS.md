@@ -83,6 +83,8 @@
 
 2026-06-09 已拉取服务器提交 `c200b54`，包含 `v3_mag_ft_w005_10ep` 的退化样本和共同失败样本 flow 诊断图/CSV。`flow_diag_old_better` 20 张退化样本中，v3 相比 v2 的 global EPE 从 141.950 升到 147.531，crack EPE 从 139.169 升到 152.091，folding rate 从 0.401218 升到 0.405723，mean displacement magnitude 从 142.239px 升到 147.605px，p95 displacement magnitude 从 253.089px 升到 260.220px；其中 crack EPE 没有任何一张改善。`flow_diag_joint_failures` 20 张中，v3 global EPE 从 133.049 小降到 132.855，15 张 global EPE 改善，但 crack EPE 从 179.567 升到 181.797，folding rate 从 0.395344 升到 0.400381，说明 w005_10ep 对整图位置有帮助，但裂缝 ROI 仍有局部过强/折叠和边缘对齐问题。代表图 `crack0079_09`、`crack0063_07` 显示退化主要发生在边缘和大形变区域，v3 位移热图更强、folding 斑点更密；`crack0030_03` 说明共同失败族整体有改善但裂缝细节仍未完全对齐。当前判断：下一阶段应从“继续调低 `W_CRACK_MAG` 或训练更久”转向加入位移幅度上限/鲁棒化、边界约束和裂缝边缘一致性约束。
 
+2026-06-09 已完成下一步代码修改：`DisplacementMagnitudeConsistencyLoss` 新增 `crack_mag_robust_delta` 和 `crack_mag_over_weight`，用于对位移幅度一致性做 Huber 式鲁棒化，并额外惩罚预测位移幅度超过 GT 的部分，降低高难样本 p95 displacement magnitude 被继续推大的风险；新增 `WarpedImageGradientConsistencyLoss`，通过预测校正图与 GT 校正图的灰度梯度差异，在 GT 校正后的裂缝 ROI 附近约束边缘结构。新增参数默认均为 0，保持历史配置不变；Slurm 包装入口已支持 `W_CRACK_EDGE`、`CRACK_MAG_ROBUST_DELTA`、`CRACK_MAG_OVER_WEIGHT` 环境变量。下一步需在服务器 `.venv/bin/python` 下做 `py_compile` 和 2 epoch smoke，本地 Windows 工作区无 `.venv`，未进行 Python 编译验证。
+
 ## Recent Changes
 
 - 新增 `.gitignore`，忽略 `.venv/`、Python 缓存、系统文件和常见编辑器目录。
@@ -131,6 +133,7 @@
 - 2026-06-09 拉取服务器提交 `5b9ca78`，完成 v2-v3 正反样本 flow 诊断 CSV 和代表性图片分析；确认 v3 变好组主要伴随位移幅度下降，变差组主要伴随位移幅度和 folding 小幅上升。
 - 2026-06-09 拉取服务器提交 `3346ffd`，完成 `v3_mag_ft_w005_10ep` 的 1000 样本结果和逐图对比分析；确认该版本较 v2 和 `W_CRACK_MAG=0.1` smoke 更稳定，是当前主线候选。
 - 2026-06-09 拉取服务器提交 `c200b54`，完成 `v3_mag_ft_w005_10ep` 退化样本和共同失败样本 flow 诊断；确认剩余失败主要集中在裂缝 ROI 的局部位移过强、folding 增加和边缘对齐不足。
+- 2026-06-09 修改 `loss_crack.py`、`train_v2.py`、`run_train_slurm.py`、`slurm_train_crackwarp.sbatch` 和 `config_crack.py`，接入鲁棒位移幅度约束、过大位移惩罚和裂缝 ROI 校正图边缘一致性损失；默认关闭以保持历史结果可复现。
 
 ## Next TODO
 
@@ -163,6 +166,9 @@
 - 下一步不要立刻继续 50 epoch；优先对 `v3_mag_ft_w005_10ep/compare_v2_vs_w005_10ep/old_better_images.txt` 和 `joint_failure_images.txt` 导出 flow 诊断图，确认剩余 150 张退化样本是否仍由裂缝 ROI 位移过大、边界大形变或 edge fidelity 下降导致。
 - 若 `w005_10ep` 的退化样本也主要是位移幅度过大，则下一轮可考虑 `W_CRACK_MAG=0.03` 的 10 epoch 对照，或在 magnitude loss 中加入 robust/clamp 策略；若主要是边缘变糊，则优先补 edge/gradient consistency，而不是继续调 `W_CRACK_MAG`。
 - 下一步代码优化优先级：在 magnitude consistency 中加入鲁棒/上限策略，避免高难样本 p95 displacement magnitude 被继续推大；同时增加裂缝 ROI 边缘/梯度一致性或 edge-preserving 项，解决 EPE 改善但 edge fidelity 仍偏低的问题。
+- 服务器 pull 新代码后先执行语法检查：`.venv/bin/python -m py_compile loss_crack.py train_v2.py run_train_slurm.py utils/evaluate_metrics.py`。
+- 语法检查通过后建议先跑 2 epoch smoke：`INIT_CHECKPOINT=output_crackwarp_slurm/v3_mag_ft_w005_10ep/best_epe.pth W_CRACK_MAG=0.05 CRACK_MAG_ROBUST_DELTA=0.01 CRACK_MAG_OVER_WEIGHT=0.5 W_CRACK_EDGE=0.05 LR=3e-6 EPOCHS=2 OUTPUT_DIR=output_crackwarp_slurm/v4_robust_edge_smoke sbatch --partition=gpuHz --time=02:00:00 slurm_train_crackwarp.sbatch`。
+- smoke 日志中需要确认 `c_mag` 和 `c_edge` 正常出现；若 120 样本评估没有明显退化，再做 1000 样本评估和 v3_w005 对比。
 - 如果 v2-v3 flow 诊断确认 v3 主要是在校准位移幅度且没有引入新的边界折叠，再提交 10 epoch 小规模 fine-tune：`INIT_CHECKPOINT=output_crackwarp_slurm/v2/best_epe.pth W_CRACK_MAG=0.1 LR=5e-6 EPOCHS=10 OUTPUT_DIR=output_crackwarp_slurm/v3_mag_ft_10ep sbatch --partition=gpu --time=24:00:00 slurm_train_crackwarp.sbatch`。
 - v3 后续优化不能只依赖 `w_crack_mag`；需要同步补强 edge fidelity，例如提高边缘保持项、检查 ROI 边缘 mask 对齐，或增加裂缝边缘/梯度一致性消融，否则指标会继续出现 EPE 改善但视觉边缘变差的问题。
 
