@@ -87,6 +87,24 @@
 
 2026-06-09 服务器完成 v4 robust+edge smoke：从 `v3_mag_ft_w005_10ep/best_epe.pth` 初始化，使用 `W_CRACK_MAG=0.05`、`CRACK_MAG_ROBUST_DELTA=0.01`、`CRACK_MAG_OVER_WEIGHT=0.5`、`W_CRACK_EDGE=0.05`、`LR=3e-6`、2 epoch，输出 `output_crackwarp_slurm/v4_robust_edge_smoke`。1000 样本结果为 crack EPE 111.473701、global EPE 110.564407、Dice 0.261134、crack edge fidelity 0.205674、global edge fidelity 0.228518、folding rate 0.585879。相比 `w005_10ep`，crack/global EPE、Dice、crack/global edge 和 folding 全部改善；逐图综合评分 631 张优于 `w005_10ep`、369 张劣于 `w005_10ep`，平均综合分提升 0.698709。top 改善样本包含此前退化严重的 `crack0063_07`、`crack0063_05`、`crack0079_09`、`crack0052_00`，说明鲁棒位移和边缘一致性约束确实压住了一部分大形变退化；剩余 top 退化样本较分散，主要表现为 crack EPE/Dice 局部波动和少量 edge 下降，而非系统性 folding 崩坏。当前判断：v4 方向成立，下一步可从 v4 smoke checkpoint 继续做 8-10 epoch 小规模训练，或保守地微调 `W_CRACK_EDGE` 后做对照。
 
+2026-06-10 服务器任务 `35168809` 已完成 v4 robust+edge 延续训练，输出目录为 `output_crackwarp_slurm/v4_robust_edge_10ep`。完整 120 样本评估已保存到 `eval_best_epe_120/eval_summary.json` 和 `eval_best_epe_120/eval_per_image.csv`：primary crack EPE 106.084343、primary crack edge fidelity 0.325259、Dice 0.284522、global EPE 107.736298、global edge fidelity 0.310216、folding rate 0.582563、crack ratio 0.166787。与 v4 smoke 的 1000 样本指标不能直接横向比较，但从 120 样本口径看，crack/global EPE、edge fidelity 和 folding 均表现较好；下一步必须补做 1000 样本评估和与 `v3_mag_ft_w005_10ep`、`v4_robust_edge_smoke` 的逐图对比后再决定是否作为主模型。
+
+2026-06-10 已完成 `v4_robust_edge_10ep/best_epe.pth` 的 1000 样本评估和逐图对比。1000 样本结果为 crack EPE 110.808922、global EPE 109.764503、Dice 0.260935、crack edge fidelity 0.210758、global edge fidelity 0.236428、folding rate 0.582459。相比 `v3_mag_ft_w005_10ep` 的 1000 样本结果，v4_10ep 的 crack/global EPE、Dice、crack/global edge 和 folding 均改善；逐图综合评分显示 796 张优于 v3_w005、204 张劣于 v3_w005，平均综合分提升 2.007661。相比 `v4_robust_edge_smoke`，v4_10ep 同样继续改善，723 张优于 smoke、277 张劣于 smoke，平均综合分提升 1.308952。当前判断：`v4_robust_edge_10ep` 是目前最强主模型候选，下一步应导出退化样本和共同失败样本的 flow 诊断，确认剩余 204/277 张退化样本是否集中在边界、大形变或裂缝 ROI 局部位移过强。
+
+2026-06-10 服务器已导出 `v4_robust_edge_10ep` 相对 `v3_mag_ft_w005_10ep` 的 flow 诊断图：`flow_diag_v3_better/` 和 `flow_diag_joint_failures/` 各 20 张，并生成对应 `flow_diagnostics.csv`。控制台输出显示，共同失败组中 v4_10ep 在多数高难样本上仍降低 global EPE，例如 `crack0063_05` 从 193.454 降到 188.622，`crack0024_08` 从 178.126 降到 170.589，`crack0053_05` 从 152.892 降到 147.194；`crack0030_xx` 族群也普遍小幅改善但仍处于共同失败集合。`flow_diag_v3_better` 组虽然来自综合评分退化清单，但控制台 global EPE 并非全部退化，说明剩余劣化更可能来自 crack EPE、edge fidelity、Dice 或 folding 等综合项，需要汇总 CSV 中的 crack/folding/位移幅度均值后再判断。
+
+2026-06-10 已汇总 `v4_robust_edge_10ep` flow 诊断 CSV 的 folding 与位移幅度指标。`flow_diag_v3_better` 20 张中，v4 相比 v3 的 folding rate 从 0.400386 小升到 0.402390，但 mean displacement magnitude 从 108.476px 降到 108.220px，p95 displacement magnitude 从 215.772px 降到 214.788px。`flow_diag_joint_failures` 20 张中，v4 folding rate 从 0.400744 小升到 0.402803，但 mean displacement magnitude 从 134.401px 降到 132.662px，p95 displacement magnitude 从 257.981px 降到 254.519px。当前判断：v4_10ep 的剩余退化不是由位移幅度继续放大造成，而是在降低位移幅度和改善 EPE 的同时引入了轻微 folding 增长；下一步若继续优化，应优先考虑 Jacobian/folding 正则或边界平滑，而不是继续压低位移幅度。
+
+2026-06-10 已补充汇总 flow 诊断 CSV 的 global/crack EPE。`flow_diag_v3_better` 20 张中，v4 相比 v3 的 global EPE 从 110.830 降到 110.568，但 crack EPE 从 108.119 升到 110.112，同时 folding rate 从 0.400386 升到 0.402390，说明该组综合评分退化主要来自裂缝 ROI 对齐变差和轻微 folding 增长，而不是全图 EPE 或位移幅度。`flow_diag_joint_failures` 20 张中，v4 global EPE 从 136.136 降到 134.404，crack EPE 从 182.356 降到 180.555，位移幅度也下降，但 folding 仍从 0.400744 升到 0.402803；说明共同失败组整体仍被 v4 改善，只是绝对误差仍高。当前结论：`v4_robust_edge_10ep` 适合作为当前主模型；后续优化重点应转向裂缝 ROI 局部对齐和 folding/Jacobian 约束。
+
+2026-06-10 已按用户 `rl-init` 请求初始化 RecallLoom 项目连续性侧车目录 `.recallloom/`，并通过官方 `recallloom.py validate` 校验，当前无错误和警告。`recallloom.py status` 显示连续性状态为 `initialized_empty_shell`、置信度为 medium，推荐下一步执行 `rl-resume`、`seed_initial_continuity`、审阅 `update_protocol.md` 与 `context_brief.md`。初始化工具默认将 workspace language 设为 `en`；尝试用 `--workspace-language zh-CN --force` 重生成时被工具安全拒绝，因此暂保留现状，不手工修改 RecallLoom 管理文件。
+
+2026-06-10 已读取 Codex 线程 `019eaf6f-2f34-7cb2-80b8-b67b763d775e`（标题“查看项目进展”）的上下文，并将该线程中的项目现状种入 RecallLoom：`context_brief.md` 记录稳定项目目标、范围、来源和边界；`rolling_summary.md` 记录当前 v4 主模型候选、1000 样本指标、flow 诊断结论、筛图下一步和风险；`daily_logs/2026-06-10.md` 追加一条“导入目标线程项目现状”的里程碑记录。当前 RecallLoom 状态已从 `initialized_empty_shell` 推进为 `initialized_seeded`。
+
+2026-06-10 已按 RecallLoom 恢复项目上下文并继续进入报告素材整理阶段，新增 `报告素材筛选建议.md`。本次筛选将样本分为整体提升、共同失败但仍改善、局限/退化三类：建议优先使用 `crack0011_05`、`crack0029_04` 展示 v4 综合提升，使用 `crack0063_05`、`crack0030_08` 展示高难样本仍有改善但未彻底解决，使用 `crack0002_07`、`crack0071_07` 展示少数裂缝 ROI 指标退化。当前报告口径应保持：`v4_robust_edge_10ep` 是当前最强主模型候选，但后续仍需优化裂缝 ROI 局部对齐、folding/Jacobian 约束和边界平滑。
+
+2026-06-10 根据用户明确的四项交付差距（代码全部调好、整体训练完成、效果达到三区及以上并具备实验数据、补全新近对比实验和消融实验），新增 `最终实验推进计划.md` 和 `utils/generate_final_experiment_commands.py`。当前执行策略是先固定 v4 主模型候选并补最终评估，再优先跑 `abl_robust_only`、`abl_edge_only`、`abl_no_over_penalty`、`abl_edge_w003` 等关键消融；外部对比优先调研/适配 2023-2025 的 SEA-RAFT、UniMatch、MemFlow、NeuFlow 等新近 dense matching / optical flow 方法，避免只使用过旧弱基线。
+
 ## Recent Changes
 
 - 新增 `.gitignore`，忽略 `.venv/`、Python 缓存、系统文件和常见编辑器目录。
@@ -137,6 +155,16 @@
 - 2026-06-09 拉取服务器提交 `c200b54`，完成 `v3_mag_ft_w005_10ep` 退化样本和共同失败样本 flow 诊断；确认剩余失败主要集中在裂缝 ROI 的局部位移过强、folding 增加和边缘对齐不足。
 - 2026-06-09 修改 `loss_crack.py`、`train_v2.py`、`run_train_slurm.py`、`slurm_train_crackwarp.sbatch` 和 `config_crack.py`，接入鲁棒位移幅度约束、过大位移惩罚和裂缝 ROI 校正图边缘一致性损失；默认关闭以保持历史结果可复现。
 - 2026-06-09 拉取服务器提交 `2c37686`，分析 `v4_robust_edge_smoke` 的 120/1000 样本评估和与 `w005_10ep` 的逐图对比；确认 v4 在 EPE、Dice、edge fidelity 和 folding 上均进一步改善。
+- 2026-06-10 记录服务器 Slurm 任务 `35168809` 已跑完 `v4_robust_edge_10ep`，其 120 样本评估输出已生成，日志片段显示 global EPE、global edge fidelity 和 folding rate 继续保持改善趋势。
+- 2026-06-10 完成 `v4_robust_edge_10ep` 的 1000 样本评估和与 `v3_mag_ft_w005_10ep`、`v4_robust_edge_smoke` 的逐图对比；确认 v4_10ep 在当前主指标和多数样本上均为当前最佳候选。
+- 2026-06-10 导出 `v4_robust_edge_10ep` 相对 v3_w005 的退化样本和共同失败样本 flow 诊断图；初步观察共同失败组 global EPE 多数继续下降，但退化组需要进一步汇总 crack、edge、folding 和位移幅度指标。
+- 2026-06-10 汇总 v4_10ep flow 诊断 CSV 的 folding 与位移幅度指标；确认 v4 剩余副作用更像轻微 folding 增长，而不是位移幅度被继续推大。
+- 2026-06-10 补充汇总 flow 诊断 CSV 的 global/crack EPE；确认 v3_better 组的 v4 退化主要来自 crack EPE 上升和 folding 小幅上升，而共同失败组中 v4 仍同时改善 global/crack EPE。
+- 2026-06-10 初始化 RecallLoom 侧车目录 `.recallloom/`，生成 `context_brief.md`、`rolling_summary.md`、`update_protocol.md`、`config.json` 和 `state.json`，并完成 `validate` 与 `status` 检查。
+- 2026-06-10 从 Codex 线程 `019eaf6f-2f34-7cb2-80b8-b67b763d775e` 导入项目现状到 RecallLoom，更新 `context_brief.md`、`rolling_summary.md`，并追加 `daily_logs/2026-06-10.md` 里程碑记录。
+- 2026-06-10 按 RecallLoom 接续项目，新增 `报告素材筛选建议.md`，整理 v4 报告候选样本、指标依据、ROI 图路径、flow 诊断图路径和后续写作口径。
+- 2026-06-10 新增 `最终实验推进计划.md`，将代码收口、主模型最终评估、外部新近方法对比、消融实验和论文实验材料整理拆成可执行阶段。
+- 2026-06-10 新增 `utils/generate_final_experiment_commands.py`，用于生成 v4 主模型最终评估命令、关键消融 Slurm 训练命令、消融统一评估命令和外部对比方法优先级清单。
 
 ## Next TODO
 
@@ -172,8 +200,12 @@
 - 服务器 pull 新代码后先执行语法检查：`.venv/bin/python -m py_compile loss_crack.py train_v2.py run_train_slurm.py utils/evaluate_metrics.py`。
 - 语法检查通过后建议先跑 2 epoch smoke：`INIT_CHECKPOINT=output_crackwarp_slurm/v3_mag_ft_w005_10ep/best_epe.pth W_CRACK_MAG=0.05 CRACK_MAG_ROBUST_DELTA=0.01 CRACK_MAG_OVER_WEIGHT=0.5 W_CRACK_EDGE=0.05 LR=3e-6 EPOCHS=2 OUTPUT_DIR=output_crackwarp_slurm/v4_robust_edge_smoke sbatch --partition=gpuHz --time=02:00:00 slurm_train_crackwarp.sbatch`。
 - smoke 日志中需要确认 `c_mag` 和 `c_edge` 正常出现；若 120 样本评估没有明显退化，再做 1000 样本评估和 v3_w005 对比。
-- v4 smoke 已证明方向成立。下一步优先跑 8-10 epoch 延长训练：从 `output_crackwarp_slurm/v4_robust_edge_smoke/best_epe.pth` 初始化，保持 `W_CRACK_MAG=0.05`、`CRACK_MAG_ROBUST_DELTA=0.01`、`CRACK_MAG_OVER_WEIGHT=0.5`、`W_CRACK_EDGE=0.05`，学习率可继续用 `LR=3e-6`，输出到 `output_crackwarp_slurm/v4_robust_edge_10ep`。
-- 若 10 epoch 后 edge 提升但 crack EPE 波动增大，可做 `W_CRACK_EDGE=0.03` 的对照；若 EPE 和 folding 继续改善，则 v4 可作为后续对比实验和消融实验的主模型版本。
+- `v4_robust_edge_10ep` 已通过 1000 样本评估和 flow 诊断，当前可作为主模型候选。下一步应筛选代表性可视化样本，用于报告展示“整体提升、共同失败改善、少数裂缝 ROI 退化”的三类情况。
+- 使用 `utils/generate_final_experiment_commands.py --stage all` 生成下一批服务器命令，先做 v4 最终主评估，再跑 `abl_robust_only`、`abl_edge_only`、`abl_no_over_penalty`、`abl_edge_w003` 四个关键消融。
+- 外部对比实验优先从 SEA-RAFT、UniMatch、MemFlow、NeuFlow 等 2023-2025 方法中筛选 4-6 个可适配方法，统一转换输出格式并使用当前 `utils/evaluate_metrics.py` 口径评估。
+- 若后续继续优化 v4，优先考虑裂缝 ROI 局部对齐、folding/Jacobian 正则或边界平滑项，避免在降低位移幅度和改善全图 EPE 的同时引入轻微 folding 增长或 crack EPE 局部上升。
+- 若 flow 诊断显示退化样本集中在少数高难族群，可先保留 `v4_robust_edge_10ep` 作为主模型并准备报告/消融；若退化样本表现为系统性 edge 过约束或局部错位，再做 `W_CRACK_EDGE=0.03` 或更短 fine-tune 的对照。
+- RecallLoom 已完成初始种入；后续继续项目时可先执行 `rl-resume`，重点读取 `.recallloom/rolling_summary.md` 的 v4 主模型候选、筛图下一步和风险摘要。
 - 如果 v2-v3 flow 诊断确认 v3 主要是在校准位移幅度且没有引入新的边界折叠，再提交 10 epoch 小规模 fine-tune：`INIT_CHECKPOINT=output_crackwarp_slurm/v2/best_epe.pth W_CRACK_MAG=0.1 LR=5e-6 EPOCHS=10 OUTPUT_DIR=output_crackwarp_slurm/v3_mag_ft_10ep sbatch --partition=gpu --time=24:00:00 slurm_train_crackwarp.sbatch`。
 - v3 后续优化不能只依赖 `w_crack_mag`；需要同步补强 edge fidelity，例如提高边缘保持项、检查 ROI 边缘 mask 对齐，或增加裂缝边缘/梯度一致性消融，否则指标会继续出现 EPE 改善但视觉边缘变差的问题。
 
@@ -193,6 +225,7 @@
 - 当前环境缺少 LibreOffice `soffice`，因此新增 Word 说明稿已完成结构化校验，但未完成页面 PNG 渲染级视觉 QA。
 - 当前本地 Windows 工作区没有可用 `.venv`，因此 2026-06-08 新增的诊断脚本尚未在本地完成 Python 编译检查；需要同步到服务器后使用服务器 `.venv/bin/python` 做 `py_compile` 和实际运行验证。
 - v3 fine-tune 在 1000 样本上虽比 v2 更稳，但改善幅度仍较小，且 edge fidelity 继续下降；当前只能证明位移幅度一致性损失有进一步实验价值，不能证明已经接近三区论文或工程验收水平。
+- RecallLoom 初始化时 workspace language 被设为 `en`，与本项目长期中文维护偏好不完全一致；由于官方工具拒绝直接改语言，暂不手工编辑 `.recallloom/config.json`，后续如需统一中文侧车，应优先查找官方迁移/重建路径。
 
 ## Architecture Decisions
 
@@ -201,3 +234,4 @@
 - `.venv/` 作为本地解析、评估和后续训练环境，已通过 `.gitignore` 排除。
 - 对外工作量说明同时保留 Markdown 源稿和 Word 交付稿，便于后续快速改文字并生成客户可读版本。
 - Slurm 训练采用包装入口覆盖配置，而不是复制一份训练主脚本；这样保留 `train_v2.py` 作为唯一训练逻辑源，减少后续调参时的维护分叉。
+- RecallLoom 采用隐藏侧车目录 `.recallloom/` 维护跨会话项目记忆；该目录当前由 RecallLoom 官方 helper 管理，不手工改写其中的 `config.json`、`state.json` 或 managed markers。
