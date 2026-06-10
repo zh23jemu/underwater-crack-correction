@@ -1,0 +1,18 @@
+{
+  "model": "output_crackwarp_slurm/final_ablation/abl_no_over_penalty_2ep/best_epe.pth",
+  "img_dir": "underwater_crack_v3",
+  "num_samples": 1000,
+  "primary_crack_epe_px_mean": 111.26720428466797,
+  "primary_crack_epe_px_std": 20.92291259765625,
+  "primary_crack_edge_fidelity_mean": 0.2029084712266922,
+  "primary_crack_edge_fidelity_std": 0.18006396293640137,
+  "primary_warp_crack_dice_mean": 0.26080065965652466,
+  "primary_warp_crack_dice_std": 0.08058910071849823,
+  "global_epe_px_mean": 110.4033432006836,
+  "global_epe_px_std": 8.947677612304688,
+  "global_edge_fidelity_mean": 0.22470860183238983,
+  "global_edge_fidelity_std": 0.15435345470905304,
+  "folding_rate_mean": 0.5859776735305786,
+  "folding_rate_std": 0.005226713139563799,
+  "crack_ratio_mean": 0.14487585425376892
+}

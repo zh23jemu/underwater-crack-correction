@@ -1,0 +1,9 @@
+{
+  "old_csv": "output_crackwarp_slurm/final_ablation/abl_no_over_penalty_2ep/eval_best_epe_1000/eval_per_image.csv",
+  "new_csv": "output_crackwarp_slurm/v4_robust_edge_10ep/eval_best_epe_1000_final/eval_per_image.csv",
+  "matched_images": 1000,
+  "topk": 20,
+  "mean_score_new_minus_old": 1.0817817179322236,
+  "num_new_score_positive": 732,
+  "num_new_score_negative": 268
+}

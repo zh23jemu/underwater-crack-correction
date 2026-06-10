@@ -1,0 +1,18 @@
+{
+  "model": "output_crackwarp_slurm/final_ablation/abl_robust_only_2ep/best_epe.pth",
+  "img_dir": "underwater_crack_v3",
+  "num_samples": 1000,
+  "primary_crack_epe_px_mean": 111.6507797241211,
+  "primary_crack_epe_px_std": 20.893640518188477,
+  "primary_crack_edge_fidelity_mean": 0.20411169528961182,
+  "primary_crack_edge_fidelity_std": 0.18081209063529968,
+  "primary_warp_crack_dice_mean": 0.26081961393356323,
+  "primary_warp_crack_dice_std": 0.08119326829910278,
+  "global_epe_px_mean": 110.48177337646484,
+  "global_epe_px_std": 9.05648422241211,
+  "global_edge_fidelity_mean": 0.2264387160539627,
+  "global_edge_fidelity_std": 0.15556573867797852,
+  "folding_rate_mean": 0.5851160883903503,
+  "folding_rate_std": 0.0052347686141729355,
+  "crack_ratio_mean": 0.14487585425376892
+}
