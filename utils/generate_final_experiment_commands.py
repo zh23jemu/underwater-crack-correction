@@ -203,10 +203,12 @@ def emit_ablation_eval(args: argparse.Namespace) -> None:
 
 
 def emit_external_baselines() -> None:
-    """输出外部对比方法的执行占位清单。
+    """输出外部对比方法的执行命令和优先级清单。
 
-    外部方法通常需要先 clone 代码、下载权重、适配输出格式，因此这里不生成
-    直接可运行命令，而是固定优先级和适配要求，防止后续对比实验范围漂移。
+    当前客户明确要求补全“新近对比实验”，因此这里不再只打印占位说明，
+    而是把已经适配的 UniMatch / SEA-RAFT oracle-pair 路线整理成可复制命令。
+    注意：这两类 dense matching 方法使用 GT 校正图作为配对参考，属于上界参考，
+    不是和单图像主模型完全同输入条件的直接公平比较。
     """
 
     print_section("外部对比方法优先级")
@@ -219,6 +221,84 @@ def emit_external_baselines() -> None:
     ]
     for priority, name, note in rows:
         print(f"- [{priority}] {name}: {note}")
+
+    print_section("UniMatch oracle-pair 已适配命令")
+    print("# 1) 10 张 smoke：确认导出方向和评估链路没有反向")
+    print(
+        ".venv/bin/python utils/export_unimatch_predictions.py "
+        "--num 10 --overwrite "
+        "--out_dir output_crackwarp_slurm/external_baselines/unimatch/pred_grid"
+    )
+    print(
+        ".venv/bin/python utils/evaluate_flow_predictions.py "
+        "--method_name unimatch_oracle_pair "
+        "--pred_dir output_crackwarp_slurm/external_baselines/unimatch/pred_grid "
+        "--img_dir underwater_crack_v3 "
+        "--out_dir output_crackwarp_slurm/external_baselines/unimatch/eval_10 "
+        "--num 10 --batch_size 1 --gpu 0"
+    )
+    print()
+    print("# 2) 1000 样本正式评估：当前项目已有结果，重复执行前确认是否需要覆盖 pred_grid")
+    print(
+        ".venv/bin/python utils/export_unimatch_predictions.py "
+        "--num 1000 "
+        "--out_dir output_crackwarp_slurm/external_baselines/unimatch/pred_grid"
+    )
+    print(
+        ".venv/bin/python utils/evaluate_flow_predictions.py "
+        "--method_name unimatch_oracle_pair "
+        "--pred_dir output_crackwarp_slurm/external_baselines/unimatch/pred_grid "
+        "--img_dir underwater_crack_v3 "
+        "--out_dir output_crackwarp_slurm/external_baselines/unimatch/eval_1000 "
+        "--num 1000 --batch_size 1 --gpu 0"
+    )
+    print(
+        ".venv/bin/python utils/compare_eval_per_image.py "
+        "--old_csv output_crackwarp_slurm/v4_robust_edge_10ep/eval_best_epe_1000_final/eval_per_image.csv "
+        "--new_csv output_crackwarp_slurm/external_baselines/unimatch/eval_1000/eval_per_image.csv "
+        "--out_dir output_crackwarp_slurm/external_baselines/unimatch/compare_v4_vs_unimatch "
+        "--topk 20"
+    )
+
+    print_section("SEA-RAFT oracle-pair 下一步命令")
+    print("# 1) 10 张 smoke：优先验证依赖、权重加载和 flow 方向")
+    print(
+        ".venv/bin/python utils/export_searaft_predictions.py "
+        "--num 10 --overwrite "
+        "--out_dir output_crackwarp_slurm/external_baselines/searaft/pred_grid"
+    )
+    print(
+        ".venv/bin/python utils/evaluate_flow_predictions.py "
+        "--method_name searaft_oracle_pair "
+        "--pred_dir output_crackwarp_slurm/external_baselines/searaft/pred_grid "
+        "--img_dir underwater_crack_v3 "
+        "--out_dir output_crackwarp_slurm/external_baselines/searaft/eval_10 "
+        "--num 10 --batch_size 1 --gpu 0"
+    )
+    print()
+    print("# 2) smoke 正常后扩大到 1000 样本，并与 v4 主模型逐图对比")
+    print(
+        ".venv/bin/python utils/export_searaft_predictions.py "
+        "--num 1000 "
+        "--out_dir output_crackwarp_slurm/external_baselines/searaft/pred_grid"
+    )
+    print(
+        ".venv/bin/python utils/evaluate_flow_predictions.py "
+        "--method_name searaft_oracle_pair "
+        "--pred_dir output_crackwarp_slurm/external_baselines/searaft/pred_grid "
+        "--img_dir underwater_crack_v3 "
+        "--out_dir output_crackwarp_slurm/external_baselines/searaft/eval_1000 "
+        "--num 1000 --batch_size 1 --gpu 0"
+    )
+    print(
+        ".venv/bin/python utils/compare_eval_per_image.py "
+        "--old_csv output_crackwarp_slurm/v4_robust_edge_10ep/eval_best_epe_1000_final/eval_per_image.csv "
+        "--new_csv output_crackwarp_slurm/external_baselines/searaft/eval_1000/eval_per_image.csv "
+        "--out_dir output_crackwarp_slurm/external_baselines/searaft/compare_v4_vs_searaft "
+        "--topk 20"
+    )
+    print()
+    print("# 3) SEA-RAFT 1000 样本结果生成后，再把该方法加入 utils/summarize_final_results.py 的 default_specs。")
 
 
 def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:

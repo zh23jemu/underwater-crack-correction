@@ -187,6 +187,11 @@
 - 2026-06-11 完成外部评估入口 GT sanity check，并新增 `utils/export_unimatch_predictions.py`，用于导出 UniMatch oracle-pair dense matching 预测坐标场。
 - 2026-06-11 拉取 UniMatch 1000 样本外部对比结果，确认其作为 oracle-pair 上界参考显著强于 v4；同步更新最终结果汇总脚本以纳入 UniMatch。
 - 2026-06-11 新增 `utils/export_searaft_predictions.py`，准备将 SEA-RAFT 作为第二个新近外部 oracle-pair dense matching 对比方法。
+- 2026-06-11 通过 RecallLoom 接续项目后，新增 `最终实验结果汇总.md`，把 v4 主模型、4 个 2 epoch 消融和 UniMatch oracle-pair 外部上界整理为面向报告/论文实验章节的中文结论稿；当前写作口径明确为：v4 是当前最稳内部主模型，UniMatch 只能作为配对参考条件下的上界，不可写成同输入条件直接公平对比。
+- 2026-06-11 继续围绕客户四项核心交付要求收束，新增 `客户需求对齐检查清单.md`，把“代码全部调好、整体训练完成、三区及以上实验完整度、新近对比与消融实验”逐项映射到当前证据、缺口和下一步动作；同时更新 `utils/generate_final_experiment_commands.py`，使 `--stage external` 能直接输出 UniMatch 与 SEA-RAFT oracle-pair 的 smoke、1000 样本评估和 v4 逐图对比命令。
+- 2026-06-11 服务器运行 SEA-RAFT smoke 时失败，报错为 `ImportError: cannot import name 'coords_grid' from 'utils.utils'`，根因是 SEA-RAFT 仓库内部 `utils` 包与本项目 `utils` 包重名，服务器脚本仍在导入 SEA-RAFT 前保留了项目 `utils` 模块缓存。应先同步或修补 `utils/export_searaft_predictions.py` 中的 `load_searaft` 导入隔离逻辑，再重新从 10 张 smoke 开始；在预测文件未生成前，不应继续执行评估、对比和查看 summary 命令。
+- 2026-06-11 服务器已修复 SEA-RAFT `utils` 包名冲突并完成 10 张 smoke 导出/评估。`export_searaft_predictions.py --num 10 --overwrite` 成功生成 `crack0001_00.png.npy` 至 `crack0001_09.png.npy`；10 张评估结果为 crack EPE 3.064834、global EPE 2.377873、Dice 0.649974、crack edge 0.728619、global edge 0.709878、folding rate 0.039522。当前判断 SEA-RAFT oracle-pair 方向正常，可扩大到 1000 样本并与 v4 主模型逐图对比。
+- 2026-06-11 服务器完成 SEA-RAFT oracle-pair 1000 样本导出、评估和与 v4 的逐图对比。结果为 crack EPE 3.140002、global EPE 1.953668、Dice 0.718757、crack edge 0.694224、global edge 0.711150、folding rate 0.030357；相对 v4 的逐图综合评分为 SEA-RAFT 1000/1000 张均优于 v4，mean score new-old 为 228.939246。已在本地新增 SEA-RAFT 的 `eval_summary.json` 和 `compare_summary.json` 轻量摘要，更新 `utils/summarize_final_results.py`、`final_ablation_summary.md`、`最终实验结果汇总.md` 和 `客户需求对齐检查清单.md`，当前新近外部 oracle 上界对比已包含 UniMatch 与 SEA-RAFT 两个方法。
 
 ## Next TODO
 
@@ -230,7 +235,12 @@
 - 外部方法适配的统一目标是导出 `pred_dir/xxx.png.npy`，shape 为 `(2,H,W)` 或 `(H,W,2)`，优先使用与项目标签一致的归一化逆映射坐标场，然后用 `utils/evaluate_flow_predictions.py` 评估。
 - 服务器下一步先运行 `utils/export_unimatch_predictions.py --num 10 --overwrite` 做 UniMatch 预测导出 smoke；若能生成 10 个 `pred_grid/*.npy`，再用 `utils/evaluate_flow_predictions.py` 评估 UniMatch 10 样本结果，确认方向没有明显反掉。
 - 基于 UniMatch 1000 样本结果更新最终汇总表；报告中将 UniMatch 写作 oracle-pair dense matching 上界参考，而不是同输入条件单图像校正方法。
+- 基于 `最终实验结果汇总.md` 撰写报告实验章节时，应把主模型、消融和外部上界分成三个小节，避免把 UniMatch 的 oracle-pair 指标与 v4 单图像输入结果混写为同条件比较。
+- 面向客户汇报时优先使用 `客户需求对齐检查清单.md` 组织材料：先说明四项需求对应的当前完成度，再给出证据文件和剩余缺口，避免只展示分散实验指标。
 - 服务器下一步安装/验证 SEA-RAFT，并先导出 10 张 `pred_grid` 做 smoke；如果 EPE 方向正常，再扩大到 1000 样本并纳入最终汇总表。
+- SEA-RAFT 下一步必须先修复服务器脚本的 `utils` 包名冲突；修复后执行 `py_compile`，再运行 `export_searaft_predictions.py --num 10 --overwrite`，只有成功生成 `pred_grid/crack0001_00.png.npy` 等预测文件后，才继续 10 张评估、1000 张导出和 v4 对比。
+- SEA-RAFT smoke 已通过，下一步直接执行 1000 样本导出、统一评估和 `compare_v4_vs_searaft`；完成后把 `eval_1000/eval_summary.json` 与 `compare_v4_vs_searaft/compare_summary.json` 同步回本地，并将 SEA-RAFT 纳入 `utils/summarize_final_results.py` 与 `最终实验结果汇总.md`。
+- UniMatch 与 SEA-RAFT 两个新近外部 oracle-pair 上界对比已补齐；下一步应转向最终报告实验章节整理，包括主模型结果表、消融表、外部上界表、代表性可视化、失败案例、训练曲线和运行成本说明。
 - 若后续继续优化 v4，优先考虑裂缝 ROI 局部对齐、folding/Jacobian 正则或边界平滑项，避免在降低位移幅度和改善全图 EPE 的同时引入轻微 folding 增长或 crack EPE 局部上升。
 - 若 flow 诊断显示退化样本集中在少数高难族群，可先保留 `v4_robust_edge_10ep` 作为主模型并准备报告/消融；若退化样本表现为系统性 edge 过约束或局部错位，再做 `W_CRACK_EDGE=0.03` 或更短 fine-tune 的对照。
 - RecallLoom 已完成初始种入；后续继续项目时可先执行 `rl-resume`，重点读取 `.recallloom/rolling_summary.md` 的 v4 主模型候选、筛图下一步和风险摘要。

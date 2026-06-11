@@ -116,6 +116,15 @@ def default_specs(root: Path) -> List[ExperimentSpec]:
             / "output_crackwarp_slurm/external_baselines/unimatch/compare_v4_vs_unimatch/compare_summary.json",
             compare_direction="method_as_new",
         ),
+        ExperimentSpec(
+            name="searaft_oracle_pair",
+            role="外部对比：SEA-RAFT oracle-pair",
+            summary_path=root
+            / "output_crackwarp_slurm/external_baselines/searaft/eval_1000/eval_summary.json",
+            compare_to_v4_path=root
+            / "output_crackwarp_slurm/external_baselines/searaft/compare_v4_vs_searaft/compare_summary.json",
+            compare_direction="method_as_new",
+        ),
     ]
 
 
@@ -227,7 +236,7 @@ def write_markdown(rows: List[Dict[str, object]], path: Path) -> None:
         if row["experiment"] == "v4_robust_edge_10ep":
             conclusion = "当前最稳主模型"
             pair = "-"
-        elif row["experiment"] == "unimatch_oracle_pair":
+        elif row["experiment"] in {"unimatch_oracle_pair", "searaft_oracle_pair"}:
             conclusion = "oracle-pair 上界参考，非同输入条件"
             pair = f"{row['v4_better_images']}/{row['other_better_images']}"
         else:
@@ -255,7 +264,7 @@ def write_markdown(rows: List[Dict[str, object]], path: Path) -> None:
             "",
             "- `v4_robust_edge_10ep` 在 1000 样本上仍是当前最稳主模型。",
             "- 4 个 2 epoch 消融均未超过完整 v4，说明鲁棒位移、过大位移惩罚和边缘一致性组合具有必要性。",
-            "- `unimatch_oracle_pair` 使用 GT 校正图和输入图做 dense matching，属于 oracle-pair 上界参考，不能作为同输入条件方法直接压过主模型来表述。",
+            "- `unimatch_oracle_pair` 和 `searaft_oracle_pair` 使用 GT 校正图和输入图做 dense matching，属于 oracle-pair 上界参考，不能作为同输入条件方法直接压过主模型来表述。",
             "- 后续若继续做模型优化，应优先设计 folding/Jacobian 正则、边界平滑或 ROI 局部对齐消融，而不是简单拉长这 4 个配置。",
         ]
     )
