@@ -115,6 +115,10 @@
 
 2026-06-11 服务器已完成外部评估入口的 GT sanity check：使用 `underwater_crack_v3` 标签作为预测坐标场评估 10 张样本，crack/global EPE 均为 0，crack/global edge fidelity 均为 1，说明 `utils/evaluate_flow_predictions.py` 的基础评估链路正确。随后确认服务器尚未生成 UniMatch `pred_grid`，并已在项目内 `external_methods/unimatch` 准备 UniMatch 官方仓库和 GMFlow 预训练权重。为继续外部对比适配，新增 `utils/export_unimatch_predictions.py`：该脚本用 GT 标签生成校正图，运行 UniMatch 估计 `GT 校正图 -> 扭曲输入图` 的 flow，再转为项目统一的归一化逆映射坐标场。注意该设置属于 oracle-pair dense matching 对比，报告中必须注明其输入条件不同于单图像主模型。
 
+2026-06-11 服务器完成 UniMatch oracle-pair dense matching 的 1000 样本导出与评估，并已推送结果。UniMatch 1000 样本结果为 crack EPE 3.810645、global EPE 1.676183、Dice 0.715517、crack edge 0.750679、global edge 0.813755、folding rate 0.032984；与 v4 逐图对比中 UniMatch 综合分 1000/1000 张均优于 v4。该结果说明外部 dense matching 上界非常强，可用于论文/报告中的“oracle-pair 参考上界”或“有配对参考图时的 dense matching 对比”，但不能作为同输入条件直接对比主结论。已更新 `utils/summarize_final_results.py`，将 UniMatch 纳入最终汇总表并标注其 oracle-pair 属性。
+
+2026-06-11 为继续补齐新近外部对比，新增 `utils/export_searaft_predictions.py`。该脚本按 SEA-RAFT 官方 README 的 custom 用法适配 Spring-M 配置和 HuggingFace 权重 `MemorySlices/Tartan-C-T-TSKH-spring540x960-M`，同样采用 oracle-pair 设置：先由 GT 标签生成校正图，再估计 `GT 校正图 -> 扭曲输入图` 的 flow，并保存为项目统一的 `pred_grid/xxx.png.npy` 归一化逆映射坐标场。下一步服务器需要 clone `princeton-vl/SEA-RAFT` 到 `external_methods/SEA-RAFT`，安装依赖，先跑 10 张 smoke，再用 `utils/evaluate_flow_predictions.py` 评估方向和指标。
+
 ## Recent Changes
 
 - 新增 `.gitignore`，忽略 `.venv/`、Python 缓存、系统文件和常见编辑器目录。
@@ -181,6 +185,8 @@
 - 2026-06-11 新增 `utils/summarize_final_results.py` 并生成最终主模型与消融实验汇总 CSV/Markdown 表，便于后续直接写报告或论文实验部分。
 - 2026-06-11 新增 `utils/evaluate_flow_predictions.py`，为外部新近方法提供统一预测坐标场评估入口；同步更新 `最终实验推进计划.md` 中的外部方法输出格式约定。
 - 2026-06-11 完成外部评估入口 GT sanity check，并新增 `utils/export_unimatch_predictions.py`，用于导出 UniMatch oracle-pair dense matching 预测坐标场。
+- 2026-06-11 拉取 UniMatch 1000 样本外部对比结果，确认其作为 oracle-pair 上界参考显著强于 v4；同步更新最终结果汇总脚本以纳入 UniMatch。
+- 2026-06-11 新增 `utils/export_searaft_predictions.py`，准备将 SEA-RAFT 作为第二个新近外部 oracle-pair dense matching 对比方法。
 
 ## Next TODO
 
@@ -223,6 +229,8 @@
 - 外部对比实验优先从 SEA-RAFT、UniMatch、MemFlow、NeuFlow 等 2023-2025 方法中筛选 4-6 个可适配方法，统一转换输出格式并使用当前 `utils/evaluate_metrics.py` 口径评估。
 - 外部方法适配的统一目标是导出 `pred_dir/xxx.png.npy`，shape 为 `(2,H,W)` 或 `(H,W,2)`，优先使用与项目标签一致的归一化逆映射坐标场，然后用 `utils/evaluate_flow_predictions.py` 评估。
 - 服务器下一步先运行 `utils/export_unimatch_predictions.py --num 10 --overwrite` 做 UniMatch 预测导出 smoke；若能生成 10 个 `pred_grid/*.npy`，再用 `utils/evaluate_flow_predictions.py` 评估 UniMatch 10 样本结果，确认方向没有明显反掉。
+- 基于 UniMatch 1000 样本结果更新最终汇总表；报告中将 UniMatch 写作 oracle-pair dense matching 上界参考，而不是同输入条件单图像校正方法。
+- 服务器下一步安装/验证 SEA-RAFT，并先导出 10 张 `pred_grid` 做 smoke；如果 EPE 方向正常，再扩大到 1000 样本并纳入最终汇总表。
 - 若后续继续优化 v4，优先考虑裂缝 ROI 局部对齐、folding/Jacobian 正则或边界平滑项，避免在降低位移幅度和改善全图 EPE 的同时引入轻微 folding 增长或 crack EPE 局部上升。
 - 若 flow 诊断显示退化样本集中在少数高难族群，可先保留 `v4_robust_edge_10ep` 作为主模型并准备报告/消融；若退化样本表现为系统性 edge 过约束或局部错位，再做 `W_CRACK_EDGE=0.03` 或更短 fine-tune 的对照。
 - RecallLoom 已完成初始种入；后续继续项目时可先执行 `rl-resume`，重点读取 `.recallloom/rolling_summary.md` 的 v4 主模型候选、筛图下一步和风险摘要。
