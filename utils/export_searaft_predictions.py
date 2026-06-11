@@ -16,6 +16,7 @@ SEA-RAFT 是 2024 年光流方法，适合作为新近 dense matching / optical 
 from __future__ import annotations
 
 import argparse
+import importlib
 import json
 import os
 import sys
@@ -75,13 +76,44 @@ def load_config(cfg_path: Path) -> SimpleNamespace:
 
 
 def load_searaft(repo_dir: Path, cfg_path: Path, checkpoint: str, url: str, device: torch.device):
-    """加载 SEA-RAFT 模型，支持本地 checkpoint 或 HuggingFace url。"""
+    """加载 SEA-RAFT 模型，支持本地 checkpoint 或 HuggingFace url。
 
-    sys.path.insert(0, str(repo_dir / "core"))
+    SEA-RAFT 仓库内部也有名为 `utils` 的包，而本项目同样有 `utils` 包。
+    当前脚本前面已经导入了 `utils.evaluate_metrics`，如果不隔离导入环境，
+    SEA-RAFT 的 `from utils.utils import coords_grid` 会误命中本项目的
+    `utils/utils.py`，导致缺少 `coords_grid`。这里在导入 SEA-RAFT 前临时
+    移除 `sys.modules` 里的项目 `utils` 条目，并把 SEA-RAFT 的 `core`
+    目录放到搜索路径最前面，确保其内部依赖解析到自己的实现。
+    """
+
+    repo_dir = repo_dir.resolve()
+    core_dir = repo_dir / "core"
+    original_sys_path = list(sys.path)
+    removed_modules = {
+        name: module
+        for name, module in list(sys.modules.items())
+        if name == "utils" or name.startswith("utils.")
+    }
+    for name in removed_modules:
+        sys.modules.pop(name, None)
+
+    sys.path.insert(0, str(core_dir))
     sys.path.insert(0, str(repo_dir))
 
-    from raft import RAFT  # pylint: disable=import-error,import-outside-toplevel
-    from utils.utils import load_ckpt  # pylint: disable=import-error,import-outside-toplevel
+    try:
+        raft_module = importlib.import_module("raft")
+        sea_utils = importlib.import_module("utils.utils")
+    finally:
+        # 保持后续项目代码的导入环境干净；SEA-RAFT 已导入的模块对象会继续持有
+        # 自己需要的函数引用。
+        sys.path[:] = original_sys_path
+        for name in list(sys.modules):
+            if name == "utils" or name.startswith("utils."):
+                sys.modules.pop(name, None)
+        sys.modules.update(removed_modules)
+
+    RAFT = raft_module.RAFT
+    load_ckpt = sea_utils.load_ckpt
 
     args = load_config(cfg_path)
     args.cfg = str(cfg_path)
