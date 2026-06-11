@@ -113,6 +113,8 @@
 
 2026-06-11 为紧扣用户“补全新近对比实验”的需求，新增 `utils/evaluate_flow_predictions.py` 作为外部方法通用评估入口。该脚本复用主模型评估口径，支持读取外部方法逐图导出的 `.npy` 预测坐标场，默认格式为与项目标签一致的 `[0,1]` 归一化逆映射坐标，也支持 `pixel_flow` 初步转换。后续 UniMatch、SEA-RAFT、MemFlow、NeuFlow 等方法只要先适配输出到 `pred_dir/xxx.png.npy`，即可用同一指标生成 `eval_summary.json` 和 `eval_per_image.csv`，从而进入最终对比表。
 
+2026-06-11 服务器已完成外部评估入口的 GT sanity check：使用 `underwater_crack_v3` 标签作为预测坐标场评估 10 张样本，crack/global EPE 均为 0，crack/global edge fidelity 均为 1，说明 `utils/evaluate_flow_predictions.py` 的基础评估链路正确。随后确认服务器尚未生成 UniMatch `pred_grid`，并已在项目内 `external_methods/unimatch` 准备 UniMatch 官方仓库和 GMFlow 预训练权重。为继续外部对比适配，新增 `utils/export_unimatch_predictions.py`：该脚本用 GT 标签生成校正图，运行 UniMatch 估计 `GT 校正图 -> 扭曲输入图` 的 flow，再转为项目统一的归一化逆映射坐标场。注意该设置属于 oracle-pair dense matching 对比，报告中必须注明其输入条件不同于单图像主模型。
+
 ## Recent Changes
 
 - 新增 `.gitignore`，忽略 `.venv/`、Python 缓存、系统文件和常见编辑器目录。
@@ -178,6 +180,7 @@
 - 2026-06-11 完成 4 个 2 epoch 消融的 1000 样本评估；确认所有单项/弱化配置均未超过完整 v4，消融结果可用于证明完整 v4 组合必要性。
 - 2026-06-11 新增 `utils/summarize_final_results.py` 并生成最终主模型与消融实验汇总 CSV/Markdown 表，便于后续直接写报告或论文实验部分。
 - 2026-06-11 新增 `utils/evaluate_flow_predictions.py`，为外部新近方法提供统一预测坐标场评估入口；同步更新 `最终实验推进计划.md` 中的外部方法输出格式约定。
+- 2026-06-11 完成外部评估入口 GT sanity check，并新增 `utils/export_unimatch_predictions.py`，用于导出 UniMatch oracle-pair dense matching 预测坐标场。
 
 ## Next TODO
 
@@ -219,6 +222,7 @@
 - 基于 `summary_tables/final_ablation_summary.md` 整理报告中的消融表和文字结论；下一步研发重点转向外部新近方法对比适配。
 - 外部对比实验优先从 SEA-RAFT、UniMatch、MemFlow、NeuFlow 等 2023-2025 方法中筛选 4-6 个可适配方法，统一转换输出格式并使用当前 `utils/evaluate_metrics.py` 口径评估。
 - 外部方法适配的统一目标是导出 `pred_dir/xxx.png.npy`，shape 为 `(2,H,W)` 或 `(H,W,2)`，优先使用与项目标签一致的归一化逆映射坐标场，然后用 `utils/evaluate_flow_predictions.py` 评估。
+- 服务器下一步先运行 `utils/export_unimatch_predictions.py --num 10 --overwrite` 做 UniMatch 预测导出 smoke；若能生成 10 个 `pred_grid/*.npy`，再用 `utils/evaluate_flow_predictions.py` 评估 UniMatch 10 样本结果，确认方向没有明显反掉。
 - 若后续继续优化 v4，优先考虑裂缝 ROI 局部对齐、folding/Jacobian 正则或边界平滑项，避免在降低位移幅度和改善全图 EPE 的同时引入轻微 folding 增长或 crack EPE 局部上升。
 - 若 flow 诊断显示退化样本集中在少数高难族群，可先保留 `v4_robust_edge_10ep` 作为主模型并准备报告/消融；若退化样本表现为系统性 edge 过约束或局部错位，再做 `W_CRACK_EDGE=0.03` 或更短 fine-tune 的对照。
 - RecallLoom 已完成初始种入；后续继续项目时可先执行 `rl-resume`，重点读取 `.recallloom/rolling_summary.md` 的 v4 主模型候选、筛图下一步和风险摘要。
