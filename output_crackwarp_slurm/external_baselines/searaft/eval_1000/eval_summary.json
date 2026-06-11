@@ -1,0 +1,20 @@
+{
+  "method": "searaft_oracle_pair",
+  "pred_dir": "output_crackwarp_slurm/external_baselines/searaft/pred_grid",
+  "pred_format": "normalized_grid",
+  "img_dir": "underwater_crack_v3",
+  "num_samples": 1000,
+  "primary_crack_epe_px_mean": 3.140002489089966,
+  "primary_crack_epe_px_std": 1.6853053569793701,
+  "primary_crack_edge_fidelity_mean": 0.6942243576049805,
+  "primary_crack_edge_fidelity_std": 0.06591001152992249,
+  "primary_warp_crack_dice_mean": 0.7187568545341492,
+  "primary_warp_crack_dice_std": 0.07914076000452042,
+  "global_epe_px_mean": 1.953668236732483,
+  "global_epe_px_std": 0.7614739537239075,
+  "global_edge_fidelity_mean": 0.7111497521400452,
+  "global_edge_fidelity_std": 0.044124484062194824,
+  "folding_rate_mean": 0.03035697713494301,
+  "folding_rate_std": 0.012362707406282425,
+  "crack_ratio_mean": 0.14487585425376892
+}
