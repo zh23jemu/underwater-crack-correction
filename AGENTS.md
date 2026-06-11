@@ -105,6 +105,14 @@
 
 2026-06-10 根据用户明确的四项交付差距（代码全部调好、整体训练完成、效果达到三区及以上并具备实验数据、补全新近对比实验和消融实验），新增 `最终实验推进计划.md` 和 `utils/generate_final_experiment_commands.py`。当前执行策略是先固定 v4 主模型候选并补最终评估，再优先跑 `abl_robust_only`、`abl_edge_only`、`abl_no_over_penalty`、`abl_edge_w003` 等关键消融；外部对比优先调研/适配 2023-2025 的 SEA-RAFT、UniMatch、MemFlow、NeuFlow 等新近 dense matching / optical flow 方法，避免只使用过旧弱基线。
 
+2026-06-11 服务器已完成 v4 主模型最终 1000 样本复评和 4 个 2 epoch 消融 smoke。v4 最终复评结果为 crack EPE 110.757812、global EPE 109.779900、Dice 0.260918、crack edge fidelity 0.207583、global edge fidelity 0.231067、folding rate 0.582812，和此前 1000 样本结果基本一致，说明主模型结果稳定。4 个 smoke 任务 `35277882`、`35277889`、`35277895`、`35277898` 的 `.err` 均为空，训练链路可用。120 样本 smoke 指标显示：`abl_edge_only_2ep` 的 crack/global EPE 最低（106.617/108.150）且 Dice 0.283511；`abl_no_over_penalty_2ep` 的 crack edge 最高（0.317984）且 Dice 最高（0.284091），但 folding 最差（0.585758）；`abl_robust_only_2ep` 和 `abl_edge_w003_2ep` 整体接近但无明显优势。与 v4_10ep 的 120 样本口径相比，四个 2 epoch 消融均未全面超过主模型，因此暂不建议全部扩到 10 epoch；下一步优先对 `abl_edge_only_2ep` 和 `abl_no_over_penalty_2ep` 做 1000 样本评估，再决定是否扩训练。
+
+2026-06-11 已完成 4 个 2 epoch 消融的 1000 样本评估。`abl_edge_only_2ep` 结果为 crack EPE 111.452118、global EPE 110.241234、Dice 0.260914、crack edge 0.202826、global edge 0.227496、folding 0.584606；`abl_no_over_penalty_2ep` 为 crack EPE 111.267204、global EPE 110.403343、Dice 0.260801、crack edge 0.202908、global edge 0.224709、folding 0.585978；`abl_robust_only_2ep` 为 crack EPE 111.650780、global EPE 110.481773、Dice 0.260820、crack edge 0.204112、global edge 0.226439、folding 0.585116；`abl_edge_w003_2ep` 为 crack EPE 111.529793、global EPE 110.527298、Dice 0.260168、crack edge 0.205216、global edge 0.228371、folding 0.585625。与 v4 主模型最终复评（crack EPE 110.757812、global EPE 109.779900、Dice 0.260918、crack edge 0.207583、global edge 0.231067、folding 0.582812）相比，四个 2 epoch 消融均未超过完整 v4；其中 `abl_no_over_penalty_2ep` crack EPE 相对较低但 folding 明显变差，`abl_edge_w003_2ep` crack edge 在消融中最高但 EPE、Dice 和 folding 仍弱于 v4。当前结论：完整 v4 的鲁棒位移、过大位移惩罚和边缘一致性组合仍是当前最稳方案，这 4 个 smoke 不建议扩到 10 epoch；下一步应转向外部新近方法对比适配，或设计新的 folding/Jacobian 正则消融。
+
+2026-06-11 已新增 `utils/summarize_final_results.py`，用于汇总最终主模型和消融实验的 `eval_summary.json` / `compare_summary.json`，并生成 `output_crackwarp_slurm/final_ablation/summary_tables/final_ablation_summary.csv` 与 `final_ablation_summary.md`。汇总表纳入 v3 主线、v4 主模型和 4 个 2 epoch 消融，确认 v4 在 1000 样本上仍是当前最稳主模型：相对 v3，v4 逐图综合评分 796/1000 张更优；相对 4 个消融，v4 分别在 684、732、688、728 张样本上更优。该表可直接作为报告/论文消融实验表的基础版本。
+
+2026-06-11 为紧扣用户“补全新近对比实验”的需求，新增 `utils/evaluate_flow_predictions.py` 作为外部方法通用评估入口。该脚本复用主模型评估口径，支持读取外部方法逐图导出的 `.npy` 预测坐标场，默认格式为与项目标签一致的 `[0,1]` 归一化逆映射坐标，也支持 `pixel_flow` 初步转换。后续 UniMatch、SEA-RAFT、MemFlow、NeuFlow 等方法只要先适配输出到 `pred_dir/xxx.png.npy`，即可用同一指标生成 `eval_summary.json` 和 `eval_per_image.csv`，从而进入最终对比表。
+
 ## Recent Changes
 
 - 新增 `.gitignore`，忽略 `.venv/`、Python 缓存、系统文件和常见编辑器目录。
@@ -165,6 +173,11 @@
 - 2026-06-10 按 RecallLoom 接续项目，新增 `报告素材筛选建议.md`，整理 v4 报告候选样本、指标依据、ROI 图路径、flow 诊断图路径和后续写作口径。
 - 2026-06-10 新增 `最终实验推进计划.md`，将代码收口、主模型最终评估、外部新近方法对比、消融实验和论文实验材料整理拆成可执行阶段。
 - 2026-06-10 新增 `utils/generate_final_experiment_commands.py`，用于生成 v4 主模型最终评估命令、关键消融 Slurm 训练命令、消融统一评估命令和外部对比方法优先级清单。
+- 2026-06-11 服务器完成 v4 主模型最终 1000 样本复评，指标与此前结果基本一致，确认 `v4_robust_edge_10ep` 主模型候选稳定。
+- 2026-06-11 服务器完成 4 个 2 epoch 消融 smoke，任务 `.err` 均为空；初步结果显示 `abl_edge_only_2ep` 和 `abl_no_over_penalty_2ep` 更值得继续做 1000 样本评估。
+- 2026-06-11 完成 4 个 2 epoch 消融的 1000 样本评估；确认所有单项/弱化配置均未超过完整 v4，消融结果可用于证明完整 v4 组合必要性。
+- 2026-06-11 新增 `utils/summarize_final_results.py` 并生成最终主模型与消融实验汇总 CSV/Markdown 表，便于后续直接写报告或论文实验部分。
+- 2026-06-11 新增 `utils/evaluate_flow_predictions.py`，为外部新近方法提供统一预测坐标场评估入口；同步更新 `最终实验推进计划.md` 中的外部方法输出格式约定。
 
 ## Next TODO
 
@@ -202,7 +215,10 @@
 - smoke 日志中需要确认 `c_mag` 和 `c_edge` 正常出现；若 120 样本评估没有明显退化，再做 1000 样本评估和 v3_w005 对比。
 - `v4_robust_edge_10ep` 已通过 1000 样本评估和 flow 诊断，当前可作为主模型候选。下一步应筛选代表性可视化样本，用于报告展示“整体提升、共同失败改善、少数裂缝 ROI 退化”的三类情况。
 - 使用 `utils/generate_final_experiment_commands.py --stage all` 生成下一批服务器命令，先做 v4 最终主评估，再跑 `abl_robust_only`、`abl_edge_only`、`abl_no_over_penalty`、`abl_edge_w003` 四个关键消融。
+- 4 个 2 epoch 消融 1000 样本均弱于完整 v4，暂不扩到 10 epoch；后续消融应转向 folding/Jacobian 正则、边界平滑或 ROI 局部对齐，而不是继续拉长这 4 个配置。
+- 基于 `summary_tables/final_ablation_summary.md` 整理报告中的消融表和文字结论；下一步研发重点转向外部新近方法对比适配。
 - 外部对比实验优先从 SEA-RAFT、UniMatch、MemFlow、NeuFlow 等 2023-2025 方法中筛选 4-6 个可适配方法，统一转换输出格式并使用当前 `utils/evaluate_metrics.py` 口径评估。
+- 外部方法适配的统一目标是导出 `pred_dir/xxx.png.npy`，shape 为 `(2,H,W)` 或 `(H,W,2)`，优先使用与项目标签一致的归一化逆映射坐标场，然后用 `utils/evaluate_flow_predictions.py` 评估。
 - 若后续继续优化 v4，优先考虑裂缝 ROI 局部对齐、folding/Jacobian 正则或边界平滑项，避免在降低位移幅度和改善全图 EPE 的同时引入轻微 folding 增长或 crack EPE 局部上升。
 - 若 flow 诊断显示退化样本集中在少数高难族群，可先保留 `v4_robust_edge_10ep` 作为主模型并准备报告/消融；若退化样本表现为系统性 edge 过约束或局部错位，再做 `W_CRACK_EDGE=0.03` 或更短 fine-tune 的对照。
 - RecallLoom 已完成初始种入；后续继续项目时可先执行 `rl-resume`，重点读取 `.recallloom/rolling_summary.md` 的 v4 主模型候选、筛图下一步和风险摘要。
