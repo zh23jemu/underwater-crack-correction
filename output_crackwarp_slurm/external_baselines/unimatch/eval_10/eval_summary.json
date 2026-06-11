@@ -1,0 +1,20 @@
+{
+  "method": "unimatch_oracle_pair",
+  "pred_dir": "output_crackwarp_slurm/external_baselines/unimatch/pred_grid",
+  "pred_format": "normalized_grid",
+  "img_dir": "underwater_crack_v3",
+  "num_samples": 10,
+  "primary_crack_epe_px_mean": 1.2120239734649658,
+  "primary_crack_epe_px_std": 0.6852921843528748,
+  "primary_crack_edge_fidelity_mean": 0.8608661890029907,
+  "primary_crack_edge_fidelity_std": 0.03173714503645897,
+  "primary_warp_crack_dice_mean": 0.6763189435005188,
+  "primary_warp_crack_dice_std": 0.04932999610900879,
+  "global_epe_px_mean": 0.847381591796875,
+  "global_epe_px_std": 0.31929492950439453,
+  "global_edge_fidelity_mean": 0.8612626194953918,
+  "global_edge_fidelity_std": 0.02805037423968315,
+  "folding_rate_mean": 0.04745674878358841,
+  "folding_rate_std": 0.015612002462148666,
+  "crack_ratio_mean": 0.21349044144153595
+}
