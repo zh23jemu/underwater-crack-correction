@@ -49,6 +49,8 @@ ACCUM_STEPS="${ACCUM_STEPS:-4}"
 LR="${LR:-2e-5}"
 W_CRACK_MAG="${W_CRACK_MAG:-0.0}"
 W_CRACK_EDGE="${W_CRACK_EDGE:-0.0}"
+W_JACOBIAN="${W_JACOBIAN:-0.0}"
+W_CRACK_COORD_EXTRA="${W_CRACK_COORD_EXTRA:-0.0}"
 CRACK_MAG_ROBUST_DELTA="${CRACK_MAG_ROBUST_DELTA:-0.0}"
 CRACK_MAG_OVER_WEIGHT="${CRACK_MAG_OVER_WEIGHT:-0.0}"
 INIT_CHECKPOINT="${INIT_CHECKPOINT:-}"
@@ -64,6 +66,8 @@ echo "Accum steps: ${ACCUM_STEPS}"
 echo "LR: ${LR}"
 echo "W_CRACK_MAG: ${W_CRACK_MAG}"
 echo "W_CRACK_EDGE: ${W_CRACK_EDGE}"
+echo "W_JACOBIAN: ${W_JACOBIAN}"
+echo "W_CRACK_COORD_EXTRA: ${W_CRACK_COORD_EXTRA}"
 echo "CRACK_MAG_ROBUST_DELTA: ${CRACK_MAG_ROBUST_DELTA}"
 echo "CRACK_MAG_OVER_WEIGHT: ${CRACK_MAG_OVER_WEIGHT}"
 echo "INIT_CHECKPOINT: ${INIT_CHECKPOINT}"
@@ -82,6 +86,8 @@ echo "=========================================="
   --lr "${LR}" \
   --w-crack-mag "${W_CRACK_MAG}" \
   --w-crack-edge "${W_CRACK_EDGE}" \
+  --w-jacobian "${W_JACOBIAN}" \
+  --w-crack-coord-extra "${W_CRACK_COORD_EXTRA}" \
   --crack-mag-robust-delta "${CRACK_MAG_ROBUST_DELTA}" \
   --crack-mag-over-weight "${CRACK_MAG_OVER_WEIGHT}" \
   --init-checkpoint "${INIT_CHECKPOINT}" \

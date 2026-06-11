@@ -242,6 +242,8 @@ def main():
         w_crack_freq=getattr(config, 'w_crack_freq', 0.15),
         w_crack_mag=getattr(config, 'w_crack_mag', 0.0),
         w_crack_edge=getattr(config, 'w_crack_edge', 0.0),
+        w_jacobian=getattr(config, 'w_jacobian', 0.0),
+        w_crack_coord_extra=getattr(config, 'w_crack_coord_extra', 0.0),
         crack_mag_robust_delta=getattr(config, 'crack_mag_robust_delta', 0.0),
         crack_mag_over_weight=getattr(config, 'crack_mag_over_weight', 0.0),
         crack_boost=getattr(config, 'crack_boost', 8.0),
@@ -344,10 +346,12 @@ def main():
                     f'photo={loss_dict.get("photo", 0.0):.5f} '
                     f'freq={loss_dict["freq"]:.5f} '
                     f'c_coord={loss_dict.get("crack_coord", 0.0):.5f} '
+                    f'c_coord_x={loss_dict.get("crack_coord_extra", 0.0):.5f} '
                     f'c_grad={loss_dict.get("crack_grad", 0.0):.5f} '
                     f'c_freq={loss_dict.get("crack_freq", 0.0):.5f} '
                     f'c_mag={loss_dict.get("crack_mag", 0.0):.5f} '
                     f'c_edge={loss_dict.get("crack_edge", 0.0):.5f} '
+                    f'jac={loss_dict.get("jacobian", 0.0):.5f} '
                     f'c_ratio={loss_dict.get("crack_ratio", 0.0):.4f} '
                     f'lr={get_lr(optimizer):.2e}',
                     log_file

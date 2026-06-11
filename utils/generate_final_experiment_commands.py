@@ -301,13 +301,54 @@ def emit_external_baselines() -> None:
     print("# 3) SEA-RAFT 1000 样本结果生成后，再把该方法加入 utils/summarize_final_results.py 的 default_specs。")
 
 
+def emit_v5_improvement() -> None:
+    """输出 v5 效果提升实验命令。
+
+    v5 目标不是继续补实验表，而是针对当前三区效果短板继续提高模型本身：
+    重点压低 folding，并强化裂缝 ROI 核心区域坐标对齐。这里先给短任务 smoke，
+    只有 120 样本评估不退化时再扩大到 10 epoch。
+    """
+
+    print_section("v5 效果提升实验")
+    print("# 1) 2 epoch smoke：从 v4 主模型初始化，验证 Jacobian 与裂缝核心监督是否生效")
+    print(
+        "INIT_CHECKPOINT='output_crackwarp_slurm/v4_robust_edge_10ep/best_epe.pth' "
+        "OUTPUT_DIR='output_crackwarp_slurm/v5_jacobian_roi_smoke' "
+        "EPOCHS=2 LR=2e-6 "
+        "W_CRACK_MAG=0.05 W_CRACK_EDGE=0.05 "
+        "CRACK_MAG_ROBUST_DELTA=0.01 CRACK_MAG_OVER_WEIGHT=0.5 "
+        "W_JACOBIAN=0.02 W_CRACK_COORD_EXTRA=1.0 "
+        "sbatch --partition=gpuHz --qos=shortjobs --time=01:00:00 slurm_train_crackwarp.sbatch"
+    )
+    print()
+    print("# 2) smoke 完成后做 1000 样本评估；若 folding 下降且 crack EPE 不明显退化，再扩到 10 epoch")
+    print(
+        ".venv/bin/python utils/evaluate_metrics.py "
+        "--model 'output_crackwarp_slurm/v5_jacobian_roi_smoke/best_epe.pth' "
+        "--img_dir underwater_crack_v3 "
+        "--out_dir 'output_crackwarp_slurm/v5_jacobian_roi_smoke/eval_best_epe_1000' "
+        "--num 1000 --batch_size 1 --gpu 0"
+    )
+    print()
+    print("# 3) 10 epoch 候选：仅在 smoke 指标方向正确后提交")
+    print(
+        "INIT_CHECKPOINT='output_crackwarp_slurm/v4_robust_edge_10ep/best_epe.pth' "
+        "OUTPUT_DIR='output_crackwarp_slurm/v5_jacobian_roi_10ep' "
+        "EPOCHS=10 LR=2e-6 "
+        "W_CRACK_MAG=0.05 W_CRACK_EDGE=0.05 "
+        "CRACK_MAG_ROBUST_DELTA=0.01 CRACK_MAG_OVER_WEIGHT=0.5 "
+        "W_JACOBIAN=0.02 W_CRACK_COORD_EXTRA=1.0 "
+        "sbatch --partition=gpu --time=24:00:00 slurm_train_crackwarp.sbatch"
+    )
+
+
 def parse_args(argv: Iterable[str] | None = None) -> argparse.Namespace:
     """解析命令行参数。"""
 
     parser = argparse.ArgumentParser(description="生成最终主实验、消融实验和对比实验命令")
     parser.add_argument(
         "--stage",
-        choices=["all", "main", "ablation", "ablation-eval", "external"],
+        choices=["all", "main", "ablation", "ablation-eval", "external", "v5"],
         default="all",
         help="需要输出的命令阶段。",
     )
@@ -340,6 +381,8 @@ def main() -> None:
         emit_ablation_eval(args)
     if args.stage in {"all", "external"}:
         emit_external_baselines()
+    if args.stage in {"all", "v5"}:
+        emit_v5_improvement()
 
 
 if __name__ == "__main__":

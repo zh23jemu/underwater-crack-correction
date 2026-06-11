@@ -69,6 +69,18 @@ def parse_args() -> argparse.Namespace:
         help="裂缝 ROI 校正图边缘一致性损失权重；默认 0 表示关闭。",
     )
     parser.add_argument(
+        "--w-jacobian",
+        type=float,
+        default=getattr(config, "w_jacobian", 0.0),
+        help="坐标场 Jacobian 稳定损失权重；默认 0 表示关闭。",
+    )
+    parser.add_argument(
+        "--w-crack-coord-extra",
+        type=float,
+        default=getattr(config, "w_crack_coord_extra", 0.0),
+        help="高置信裂缝核心坐标额外监督权重；默认 0 表示关闭。",
+    )
+    parser.add_argument(
         "--crack-mag-robust-delta",
         type=float,
         default=getattr(config, "crack_mag_robust_delta", 0.0),
@@ -115,6 +127,8 @@ def main() -> None:
     config.lr = args.lr
     config.w_crack_mag = args.w_crack_mag
     config.w_crack_edge = args.w_crack_edge
+    config.w_jacobian = args.w_jacobian
+    config.w_crack_coord_extra = args.w_crack_coord_extra
     config.crack_mag_robust_delta = args.crack_mag_robust_delta
     config.crack_mag_over_weight = args.crack_mag_over_weight
     config.init_checkpoint = args.init_checkpoint
@@ -133,6 +147,8 @@ def main() -> None:
     print("[Slurm wrapper] lr =", config.lr)
     print("[Slurm wrapper] w_crack_mag =", config.w_crack_mag)
     print("[Slurm wrapper] w_crack_edge =", config.w_crack_edge)
+    print("[Slurm wrapper] w_jacobian =", config.w_jacobian)
+    print("[Slurm wrapper] w_crack_coord_extra =", config.w_crack_coord_extra)
     print("[Slurm wrapper] crack_mag_robust_delta =", config.crack_mag_robust_delta)
     print("[Slurm wrapper] crack_mag_over_weight =", config.crack_mag_over_weight)
     print("[Slurm wrapper] init_checkpoint =", config.init_checkpoint)

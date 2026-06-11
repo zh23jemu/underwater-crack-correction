@@ -242,6 +242,80 @@ class FoldingPenalty(nn.Module):
         return F.relu(-det).mean()
 
 
+class JacobianConsistencyLoss(nn.Module):
+    """
+    坐标场 Jacobian 稳定损失。
+
+    现有 folding penalty 只惩罚预测坐标场中 determinant 为负的区域，能发现
+    局部翻折，但不能告诉模型“正确的局部形变梯度应该接近什么”。这里同时比较
+    预测坐标场和 GT 坐标场的一阶导数，并对负 determinant 加额外惩罚：
+
+    - gradient consistency：让预测逆映射的局部拉伸、压缩和剪切接近 GT；
+    - negative determinant：继续压低局部翻折风险；
+    - ROI mask：裂缝附近权重更高，但仍保留全图项，避免边界区域失控。
+
+    该损失默认由 `w_jacobian=0` 关闭，只在 v5 类实验中显式启用。
+    """
+
+    def __init__(self, eps=1e-3, roi_boost=2.0, negative_weight=1.0):
+        super().__init__()
+        self.eps = eps
+        self.roi_boost = float(roi_boost)
+        self.negative_weight = float(negative_weight)
+
+    @staticmethod
+    def _partials(flow):
+        """计算像素尺度中心差分导数，并裁剪到共同的内部区域。
+
+        训练标签和模型输出都是 `[0,1]` 归一化坐标。如果直接在归一化坐标上
+        求 determinant，恒等映射的 det 约为 `1 / ((W-1) * (H-1))`，数值过小，
+        folding 约束很难产生足够梯度。因此这里先还原到像素坐标尺度，使恒等
+        映射的一阶导数接近 1，Jacobian 项才能真正约束局部可逆性。
+        """
+        h, w = flow.shape[2:]
+        u = flow[:, 0] * float(w - 1)
+        v = flow[:, 1] * float(h - 1)
+
+        du_dx = (u[:, :, 2:] - u[:, :, :-2]) / 2.0
+        du_dy = (u[:, 2:, :] - u[:, :-2, :]) / 2.0
+        dv_dx = (v[:, :, 2:] - v[:, :, :-2]) / 2.0
+        dv_dy = (v[:, 2:, :] - v[:, :-2, :]) / 2.0
+
+        return (
+            du_dx[:, 1:-1, :],
+            du_dy[:, :, 1:-1],
+            dv_dx[:, 1:-1, :],
+            dv_dy[:, :, 1:-1],
+        )
+
+    def forward(self, pred, target, roi_mask=None):
+        p_du_dx, p_du_dy, p_dv_dx, p_dv_dy = self._partials(pred)
+        t_du_dx, t_du_dy, t_dv_dx, t_dv_dy = self._partials(target)
+
+        grad_diff = (
+            (p_du_dx - t_du_dx) ** 2
+            + (p_du_dy - t_du_dy) ** 2
+            + (p_dv_dx - t_dv_dx) ** 2
+            + (p_dv_dy - t_dv_dy) ** 2
+        )
+        grad_loss = torch.sqrt(grad_diff + self.eps ** 2)
+
+        det = p_du_dx * p_dv_dy - p_du_dy * p_dv_dx
+        negative_det = F.relu(-det)
+
+        if roi_mask is not None:
+            # 中心差分会去掉四周一圈，因此 mask 也裁剪到同一内部区域。
+            roi = roi_mask[:, :, 1:-1, 1:-1].squeeze(1).clamp(0.0, 1.0)
+            weight = 1.0 + self.roi_boost * roi
+            grad_term = (grad_loss * weight).sum() / weight.sum().clamp_min(1.0)
+            neg_term = (negative_det * weight).sum() / weight.sum().clamp_min(1.0)
+        else:
+            grad_term = grad_loss.mean()
+            neg_term = negative_det.mean()
+
+        return grad_term + self.negative_weight * neg_term
+
+
 class DisplacementMagnitudeConsistencyLoss(nn.Module):
     """
     位移幅度一致性损失。
@@ -372,6 +446,8 @@ class CrackWarpLoss(nn.Module):
         w_crack_freq=0.15,
         w_crack_mag=0.0,
         w_crack_edge=0.0,
+        w_jacobian=0.0,
+        w_crack_coord_extra=0.0,
         crack_mag_robust_delta=0.0,
         crack_mag_over_weight=0.0,
         crack_boost=8.0,
@@ -392,12 +468,15 @@ class CrackWarpLoss(nn.Module):
         self.w_crack_freq = w_crack_freq
         self.w_crack_mag = w_crack_mag
         self.w_crack_edge = w_crack_edge
+        self.w_jacobian = w_jacobian
+        self.w_crack_coord_extra = w_crack_coord_extra
         self.crack_boost = crack_boost
         self.crack_smooth_factor = crack_smooth_factor
 
         self.char_loss = CharbonnierLoss(eps=charbonnier_eps)
         self.smooth_loss = EdgeAwareSmoothnessLoss()
         self.fold_loss = FoldingPenalty()
+        self.jacobian_loss = JacobianConsistencyLoss(eps=charbonnier_eps)
         self.freq_loss = FrequencyLoss(loss_weight=1.0)
         self.photo_loss = PhotometricWarpLoss(charbonnier_eps=charbonnier_eps)
 
@@ -470,6 +549,12 @@ class CrackWarpLoss(nn.Module):
 
         if crack_mask is not None:
             crack_coord = self._masked_charbonnier(final_flow, lbl_full, crack_mask)
+            if self.w_crack_coord_extra > 0:
+                # mask^2 会更聚焦高置信裂缝核心，避免把背景暗纹理也过度拉进强监督。
+                crack_core = crack_mask.pow(2).clamp(0.0, 1.0)
+                crack_coord_extra = self._masked_charbonnier(final_flow, lbl_full, crack_core)
+            else:
+                crack_coord_extra = final_flow.new_zeros(())
             crack_grad = self.grad_consistency(final_flow, lbl_full, crack_mask)
             crack_freq = self.freq_loss(final_flow * crack_mask, lbl_full * crack_mask)
             crack_mag = self.mag_consistency(final_flow, lbl_full, crack_mask)
@@ -481,11 +566,17 @@ class CrackWarpLoss(nn.Module):
         else:
             zero = final_flow.new_zeros(())
             crack_coord = zero
+            crack_coord_extra = zero
             crack_grad = zero
             crack_freq = zero
             crack_mag = zero
             crack_edge = zero
             crack_ratio = zero
+
+        if self.w_jacobian > 0:
+            jacobian = self.jacobian_loss(final_flow, lbl_full, crack_mask)
+        else:
+            jacobian = final_flow.new_zeros(())
 
         total = (
             self.w_coord * coord_loss
@@ -494,10 +585,12 @@ class CrackWarpLoss(nn.Module):
             + self.w_photo * photo
             + self.w_freq * freq
             + self.w_crack_coord * crack_coord
+            + self.w_crack_coord_extra * crack_coord_extra
             + self.w_crack_grad * crack_grad
             + self.w_crack_freq * crack_freq
             + self.w_crack_mag * crack_mag
             + self.w_crack_edge * crack_edge
+            + self.w_jacobian * jacobian
         )
 
         loss_dict = {
@@ -508,10 +601,12 @@ class CrackWarpLoss(nn.Module):
             'photo': photo.item() if isinstance(photo, torch.Tensor) else photo,
             'freq': freq.item(),
             'crack_coord': crack_coord.item(),
+            'crack_coord_extra': crack_coord_extra.item(),
             'crack_grad': crack_grad.item(),
             'crack_freq': crack_freq.item(),
             'crack_mag': crack_mag.item(),
             'crack_edge': crack_edge.item(),
+            'jacobian': jacobian.item(),
             'crack_ratio': crack_ratio.item(),
         }
         return total, loss_dict
