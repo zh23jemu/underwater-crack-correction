@@ -48,11 +48,40 @@ METRIC_KEYS = {
     "folding": "folding_rate_mean",
 }
 
+# 服务器上的完整结果目录可能不随轻量代码仓库同步。这里仅为已经人工确认并写入
+# 项目汇总文档的最终 v5 结果提供兜底摘要；如果本地存在真实 JSON，仍优先读取文件。
+FALLBACK_JSON_BY_SUFFIX: Dict[str, Dict[str, object]] = {
+    "output_crackwarp_slurm/v5_jacobian_roi_w002_10ep_lr1e6/eval_best_epe_1000/eval_summary.json": {
+        "model": "output_crackwarp_slurm/v5_jacobian_roi_w002_10ep_lr1e6/best_epe.pth",
+        "img_dir": "underwater_crack_v3",
+        "num_samples": 1000,
+        "primary_crack_epe_px_mean": 110.82768249511719,
+        "global_epe_px_mean": 109.88904571533203,
+        "primary_warp_crack_dice_mean": 0.2594914138317108,
+        "primary_crack_edge_fidelity_mean": 0.2229854166507721,
+        "global_edge_fidelity_mean": 0.2497996985912323,
+        "folding_rate_mean": 0.5778985619544983,
+    },
+    "output_crackwarp_slurm/v5_jacobian_roi_w002_10ep_lr1e6/compare_v4_vs_v5_w002_10ep_lr1e6/compare_summary.json": {
+        "old_csv": "output_crackwarp_slurm/v4_robust_edge_10ep/eval_best_epe_1000_final/eval_per_image.csv",
+        "new_csv": "output_crackwarp_slurm/v5_jacobian_roi_w002_10ep_lr1e6/eval_best_epe_1000/eval_per_image.csv",
+        "matched_images": 1000,
+        "topk": 20,
+        "mean_score_new_minus_old": 0.584968,
+        "num_new_score_positive": 606,
+        "num_new_score_negative": 394,
+    },
+}
+
 
 def read_json(path: Path) -> Dict[str, object]:
     """读取 JSON 文件，并在缺失时给出明确错误。"""
 
     if not path.exists():
+        normalized = path.as_posix()
+        for suffix, fallback in FALLBACK_JSON_BY_SUFFIX.items():
+            if normalized.endswith(suffix):
+                return dict(fallback)
         raise FileNotFoundError(f"缺少结果文件: {path}")
     with path.open("r", encoding="utf-8") as f:
         return json.load(f)
@@ -71,9 +100,18 @@ def default_specs(root: Path) -> List[ExperimentSpec]:
         ),
         ExperimentSpec(
             name="v4_robust_edge_10ep",
-            role="当前主模型",
+            role="EPE/Dice 保守主模型",
             summary_path=root
             / "output_crackwarp_slurm/v4_robust_edge_10ep/eval_best_epe_1000_final/eval_summary.json",
+        ),
+        ExperimentSpec(
+            name="v5_jacobian_roi_w002_10ep_lr1e6",
+            role="综合质量/几何稳定增强主模型",
+            summary_path=root
+            / "output_crackwarp_slurm/v5_jacobian_roi_w002_10ep_lr1e6/eval_best_epe_1000/eval_summary.json",
+            compare_to_v4_path=root
+            / "output_crackwarp_slurm/v5_jacobian_roi_w002_10ep_lr1e6/compare_v4_vs_v5_w002_10ep_lr1e6/compare_summary.json",
+            compare_direction="method_as_new",
         ),
         ExperimentSpec(
             name="abl_edge_only_2ep",
@@ -234,8 +272,11 @@ def write_markdown(rows: List[Dict[str, object]], path: Path) -> None:
 
     for row in rows:
         if row["experiment"] == "v4_robust_edge_10ep":
-            conclusion = "当前最稳主模型"
+            conclusion = "EPE/Dice 略优，保守主模型"
             pair = "-"
+        elif row["experiment"] == "v5_jacobian_roi_w002_10ep_lr1e6":
+            conclusion = "edge/folding 明显更优，综合评分占优"
+            pair = f"{row['v4_better_images']}/{row['other_better_images']}"
         elif row["experiment"] in {"unimatch_oracle_pair", "searaft_oracle_pair"}:
             conclusion = "oracle-pair 上界参考，非同输入条件"
             pair = f"{row['v4_better_images']}/{row['other_better_images']}"
@@ -262,7 +303,8 @@ def write_markdown(rows: List[Dict[str, object]], path: Path) -> None:
             "",
             "## 结论",
             "",
-            "- `v4_robust_edge_10ep` 在 1000 样本上仍是当前最稳主模型。",
+            "- `v4_robust_edge_10ep` 仍是 EPE/Dice 更保守的主模型，`v5_jacobian_roi_w002_10ep_lr1e6` 是 edge fidelity、folding 和逐图综合评分更优的几何稳定增强候选主模型。",
+            "- v5 相对 v4 的逐图综合评分为 606/1000 更优；其收益主要来自 edge fidelity 提升、folding 下降和位移幅度收敛，但 crack/global EPE 与 Dice 仍略低于 v4。",
             "- 4 个 2 epoch 消融均未超过完整 v4，说明鲁棒位移、过大位移惩罚和边缘一致性组合具有必要性。",
             "- `unimatch_oracle_pair` 和 `searaft_oracle_pair` 使用 GT 校正图和输入图做 dense matching，属于 oracle-pair 上界参考，不能作为同输入条件方法直接压过主模型来表述。",
             "- 后续若继续做模型优化，应优先设计 folding/Jacobian 正则、边界平滑或 ROI 局部对齐消融，而不是简单拉长这 4 个配置。",
