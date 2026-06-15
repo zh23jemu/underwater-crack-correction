@@ -1,0 +1,21 @@
+{
+  "model": "output_crackwarp_slurm/v4_robust_edge_10ep/best_epe.pth",
+  "img_dir": "underwater_crack_v3",
+  "start": 0,
+  "num_shards": 1,
+  "shard_index": 0,
+  "num_samples": 10360,
+  "primary_crack_epe_px_mean": 114.41632843017578,
+  "primary_crack_epe_px_std": 19.12413215637207,
+  "primary_crack_edge_fidelity_mean": 0.11125008761882782,
+  "primary_crack_edge_fidelity_std": 0.15782639384269714,
+  "primary_warp_crack_dice_mean": 0.27601107954978943,
+  "primary_warp_crack_dice_std": 0.08264251053333282,
+  "global_epe_px_mean": 111.96476745605469,
+  "global_epe_px_std": 10.355819702148438,
+  "global_edge_fidelity_mean": 0.09820624440908432,
+  "global_edge_fidelity_std": 0.13944044709205627,
+  "folding_rate_mean": 0.5836426615715027,
+  "folding_rate_std": 0.004380551632493734,
+  "crack_ratio_mean": 0.1486416906118393
+}

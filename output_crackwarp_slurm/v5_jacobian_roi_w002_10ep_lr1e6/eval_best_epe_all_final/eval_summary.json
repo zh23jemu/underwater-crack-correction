@@ -1,0 +1,21 @@
+{
+  "model": "output_crackwarp_slurm/v5_jacobian_roi_w002_10ep_lr1e6/best_epe.pth",
+  "img_dir": "underwater_crack_v3",
+  "start": 0,
+  "num_shards": 1,
+  "shard_index": 0,
+  "num_samples": 10360,
+  "primary_crack_epe_px_mean": 114.44013214111328,
+  "primary_crack_epe_px_std": 18.70619773864746,
+  "primary_crack_edge_fidelity_mean": 0.12024141103029251,
+  "primary_crack_edge_fidelity_std": 0.16267795860767365,
+  "primary_warp_crack_dice_mean": 0.2749652564525604,
+  "primary_warp_crack_dice_std": 0.08379589766263962,
+  "global_epe_px_mean": 112.24691009521484,
+  "global_epe_px_std": 10.127388000488281,
+  "global_edge_fidelity_mean": 0.10908269137144089,
+  "global_edge_fidelity_std": 0.14536035060882568,
+  "folding_rate_mean": 0.5794041752815247,
+  "folding_rate_std": 0.004331587813794613,
+  "crack_ratio_mean": 0.1486416906118393
+}
