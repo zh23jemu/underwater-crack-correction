@@ -166,21 +166,52 @@ def default_specs(root: Path) -> List[ExperimentSpec]:
     ]
 
 
+def default_full_specs(root: Path) -> List[ExperimentSpec]:
+    """返回 10360 张全量评估口径下需要汇总的内部模型。"""
+
+    return [
+        ExperimentSpec(
+            name="v4_robust_edge_10ep_all",
+            role="全量：EPE/Dice 保守主模型",
+            summary_path=root
+            / "output_crackwarp_slurm/v4_robust_edge_10ep/eval_best_epe_all_final/eval_summary.json",
+        ),
+        ExperimentSpec(
+            name="v5_jacobian_roi_w002_10ep_lr1e6_all",
+            role="全量：folding 最优几何稳定候选",
+            summary_path=root
+            / "output_crackwarp_slurm/v5_jacobian_roi_w002_10ep_lr1e6/eval_best_epe_all_final/eval_summary.json",
+            compare_to_v4_path=root
+            / "output_crackwarp_slurm/v5_jacobian_roi_w002_10ep_lr1e6/compare_v4_vs_v5_all/compare_summary.json",
+            compare_direction="method_as_new",
+        ),
+        ExperimentSpec(
+            name="v6_recover_epe_from_v5_10ep_all",
+            role="全量：edge 增强补充实验",
+            summary_path=root
+            / "output_crackwarp_slurm/v6_recover_epe_from_v5_10ep/eval_best_epe_all_final/eval_summary.json",
+            compare_to_v4_path=root
+            / "output_crackwarp_slurm/v6_recover_epe_from_v5_10ep/compare_v4_vs_v6_all/compare_summary.json",
+            compare_direction="method_as_new",
+        ),
+    ]
+
+
 def metric(summary: Dict[str, object], key: str) -> float:
     """从 summary 中读取单个指标并转成 float。"""
 
     return float(summary[METRIC_KEYS[key]])
 
 
-def build_rows(specs: Iterable[ExperimentSpec]) -> List[Dict[str, object]]:
+def build_rows(specs: Iterable[ExperimentSpec], reference_name: str) -> List[Dict[str, object]]:
     """把多个实验结果整理成统一行结构。"""
 
     specs = list(specs)
     summaries = {spec.name: read_json(spec.summary_path) for spec in specs}
-    if "v4_robust_edge_10ep" not in summaries:
-        raise RuntimeError("默认汇总必须包含 v4_robust_edge_10ep 作为参考主模型。")
+    if reference_name not in summaries:
+        raise RuntimeError(f"默认汇总必须包含 {reference_name} 作为参考主模型。")
 
-    v4 = summaries["v4_robust_edge_10ep"]
+    v4 = summaries[reference_name]
     rows: List[Dict[str, object]] = []
 
     for spec in specs:
@@ -248,6 +279,13 @@ def write_markdown(rows: List[Dict[str, object]], path: Path) -> None:
     """写出面向报告的 Markdown 汇总表。"""
 
     path.parent.mkdir(parents=True, exist_ok=True)
+    is_full_table = any(str(row["experiment"]).endswith("_all") for row in rows)
+    title = "# 最终全量主模型汇总" if is_full_table else "# 最终主模型与消融实验汇总"
+    description = (
+        "说明：下表基于 10360 张全量数据评估结果。箭头表示指标方向；EPE 和 folding 越低越好，Dice 和 edge fidelity 越高越好。"
+        if is_full_table
+        else "说明：下表基于 1000 样本评估结果。箭头表示指标方向；EPE 和 folding 越低越好，Dice 和 edge fidelity 越高越好。"
+    )
     headers = [
         "实验",
         "角色",
@@ -262,20 +300,26 @@ def write_markdown(rows: List[Dict[str, object]], path: Path) -> None:
     ]
 
     lines = [
-        "# 最终主模型与消融实验汇总",
+        title,
         "",
-        "说明：下表基于 1000 样本评估结果。箭头表示指标方向；EPE 和 folding 越低越好，Dice 和 edge fidelity 越高越好。",
+        description,
         "",
         "| " + " | ".join(headers) + " |",
         "| " + " | ".join(["---"] * len(headers)) + " |",
     ]
 
     for row in rows:
-        if row["experiment"] == "v4_robust_edge_10ep":
+        if row["experiment"] in {"v4_robust_edge_10ep", "v4_robust_edge_10ep_all"}:
             conclusion = "EPE/Dice 略优，保守主模型"
             pair = "-"
         elif row["experiment"] == "v5_jacobian_roi_w002_10ep_lr1e6":
             conclusion = "edge/folding 明显更优，综合评分占优"
+            pair = f"{row['v4_better_images']}/{row['other_better_images']}"
+        elif row["experiment"] == "v5_jacobian_roi_w002_10ep_lr1e6_all":
+            conclusion = "folding 最优，综合评分优于 v4"
+            pair = f"{row['v4_better_images']}/{row['other_better_images']}"
+        elif row["experiment"] == "v6_recover_epe_from_v5_10ep_all":
+            conclusion = "edge 最优，综合评分优于 v4，但 EPE/Dice 有代价"
             pair = f"{row['v4_better_images']}/{row['other_better_images']}"
         elif row["experiment"] in {"unimatch_oracle_pair", "searaft_oracle_pair"}:
             conclusion = "oracle-pair 上界参考，非同输入条件"
@@ -303,8 +347,12 @@ def write_markdown(rows: List[Dict[str, object]], path: Path) -> None:
             "",
             "## 结论",
             "",
-            "- `v4_robust_edge_10ep` 仍是 EPE/Dice 更保守的主模型，`v5_jacobian_roi_w002_10ep_lr1e6` 是 edge fidelity、folding 和逐图综合评分更优的几何稳定增强候选主模型。",
-            "- v5 相对 v4 的逐图综合评分为 606/1000 更优；其收益主要来自 edge fidelity 提升、folding 下降和位移幅度收敛，但 crack/global EPE 与 Dice 仍略低于 v4。",
+            "- 全量口径下 `v4_robust_edge_10ep` 的 EPE/Dice 均值更稳，`v5_jacobian_roi_w002_10ep_lr1e6` 的 folding 最优，`v6_recover_epe_from_v5_10ep` 的 edge fidelity 最优。"
+            if is_full_table
+            else "- `v4_robust_edge_10ep` 仍是 EPE/Dice 更保守的主模型，`v5_jacobian_roi_w002_10ep_lr1e6` 是 edge fidelity、folding 和逐图综合评分更优的几何稳定增强候选主模型。",
+            "- 全量逐图综合评分中，v5 相对 v4 为 5503/10360 更优，v6 相对 v4 为 5710/10360 更优；因此 v5/v6 在综合覆盖面上优于 v4，但 v4 仍保留 EPE/Dice 均值优势。"
+            if is_full_table
+            else "- v5 相对 v4 的逐图综合评分为 606/1000 更优；其收益主要来自 edge fidelity 提升、folding 下降和位移幅度收敛，但 crack/global EPE 与 Dice 仍略低于 v4。",
             "- 4 个 2 epoch 消融均未超过完整 v4，说明鲁棒位移、过大位移惩罚和边缘一致性组合具有必要性。",
             "- `unimatch_oracle_pair` 和 `searaft_oracle_pair` 使用 GT 校正图和输入图做 dense matching，属于 oracle-pair 上界参考，不能作为同输入条件方法直接压过主模型来表述。",
             "- 后续若继续做模型优化，应优先设计 folding/Jacobian 正则、边界平滑或 ROI 局部对齐消融，而不是简单拉长这 4 个配置。",
@@ -332,15 +380,22 @@ def main() -> None:
     args = parse_args()
     root = Path(args.root).resolve()
     out_dir = root / args.out_dir
-    rows = build_rows(default_specs(root))
+    rows = build_rows(default_specs(root), reference_name="v4_robust_edge_10ep")
+    full_rows = build_rows(default_full_specs(root), reference_name="v4_robust_edge_10ep_all")
 
     csv_path = out_dir / "final_ablation_summary.csv"
     md_path = out_dir / "final_ablation_summary.md"
+    full_csv_path = out_dir / "final_full_summary.csv"
+    full_md_path = out_dir / "final_full_summary.md"
     write_csv(rows, csv_path)
     write_markdown(rows, md_path)
+    write_csv(full_rows, full_csv_path)
+    write_markdown(full_rows, full_md_path)
 
     print(f"CSV saved to: {csv_path}")
     print(f"Markdown saved to: {md_path}")
+    print(f"Full CSV saved to: {full_csv_path}")
+    print(f"Full Markdown saved to: {full_md_path}")
 
 
 if __name__ == "__main__":
