@@ -232,6 +232,20 @@ def run_eval(args):
         if not os.path.exists(npy):
             continue
         rows.append((p, npy))
+
+    # 支持把全量评估拆成多个互不重叠的分片，适合在 gpuHz 这类限时分区上跑。
+    # 推荐用法：同一个模型提交 N 个任务，分别设置 --num_shards N 和
+    # --shard_index 0..N-1；某个分片失败时只需要重跑该分片。
+    if args.num_shards < 1:
+        raise ValueError('--num_shards 必须 >= 1')
+    if not 0 <= args.shard_index < args.num_shards:
+        raise ValueError('--shard_index 必须满足 0 <= shard_index < num_shards')
+    if args.start < 0:
+        raise ValueError('--start 必须 >= 0')
+    if args.start:
+        rows = rows[args.start:]
+    if args.num_shards > 1:
+        rows = rows[args.shard_index::args.num_shards]
     if args.num > 0:
         rows = rows[:args.num]
     if not rows:
@@ -298,6 +312,9 @@ def run_eval(args):
     summary = {
         'model': args.model,
         'img_dir': args.img_dir,
+        'start': int(args.start),
+        'num_shards': int(args.num_shards),
+        'shard_index': int(args.shard_index),
         'num_samples': int(len(per_image)),
         'primary_crack_epe_px_mean': float(np.mean(crack_epe_np)),
         'primary_crack_epe_px_std': float(np.std(crack_epe_np)),
@@ -355,6 +372,9 @@ def parse_args():
     p.add_argument('--size', type=int, default=512, help='evaluation image size')
     p.add_argument('--batch_size', type=int, default=4, help='batch size')
     p.add_argument('--num', type=int, default=-1, help='number of samples, -1 for all')
+    p.add_argument('--start', type=int, default=0, help='skip the first N paired samples before evaluation')
+    p.add_argument('--num_shards', type=int, default=1, help='split paired samples into N interleaved shards')
+    p.add_argument('--shard_index', type=int, default=0, help='current shard index in [0, num_shards)')
     p.add_argument('--gpu', type=int, default=0, help='gpu index')
     p.add_argument('--crack_topk', type=float, default=0.08, help='top-k ratio for crack ROI estimator')
     p.add_argument('--crack_temp', type=float, default=0.07, help='temperature for crack ROI estimator')
