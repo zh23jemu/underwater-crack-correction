@@ -1,0 +1,9 @@
+{
+  "old_csv": "output_crackwarp_slurm/v7_edge_w003_jac_w0005_from_v4_10ep/eval_best_epe_all_final/eval_per_image.csv",
+  "new_csv": "output_crackwarp_slurm/v8_mag_w006_edge_w003_from_v7_10ep/eval_best_epe_all_final/eval_per_image.csv",
+  "matched_images": 10360,
+  "topk": 20,
+  "mean_score_new_minus_old": 0.1447766278862495,
+  "num_new_score_positive": 5909,
+  "num_new_score_negative": 4451
+}
