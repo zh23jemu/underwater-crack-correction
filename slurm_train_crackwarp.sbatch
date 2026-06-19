@@ -54,6 +54,8 @@ W_CRACK_COORD_EXTRA="${W_CRACK_COORD_EXTRA:-0.0}"
 CRACK_MAG_ROBUST_DELTA="${CRACK_MAG_ROBUST_DELTA:-0.0}"
 CRACK_MAG_OVER_WEIGHT="${CRACK_MAG_OVER_WEIGHT:-0.0}"
 INIT_CHECKPOINT="${INIT_CHECKPOINT:-}"
+HARD_SAMPLE_LIST="${HARD_SAMPLE_LIST:-}"
+HARD_SAMPLE_WEIGHT="${HARD_SAMPLE_WEIGHT:-1.0}"
 
 echo "========== CrackWarp Slurm 训练 =========="
 echo "提交目录: ${PWD}"
@@ -71,6 +73,8 @@ echo "W_CRACK_COORD_EXTRA: ${W_CRACK_COORD_EXTRA}"
 echo "CRACK_MAG_ROBUST_DELTA: ${CRACK_MAG_ROBUST_DELTA}"
 echo "CRACK_MAG_OVER_WEIGHT: ${CRACK_MAG_OVER_WEIGHT}"
 echo "INIT_CHECKPOINT: ${INIT_CHECKPOINT}"
+echo "HARD_SAMPLE_LIST: ${HARD_SAMPLE_LIST}"
+echo "HARD_SAMPLE_WEIGHT: ${HARD_SAMPLE_WEIGHT}"
 echo "CUDA_VISIBLE_DEVICES: ${CUDA_VISIBLE_DEVICES:-未设置}"
 echo "=========================================="
 
@@ -91,6 +95,8 @@ echo "=========================================="
   --crack-mag-robust-delta "${CRACK_MAG_ROBUST_DELTA}" \
   --crack-mag-over-weight "${CRACK_MAG_OVER_WEIGHT}" \
   --init-checkpoint "${INIT_CHECKPOINT}" \
+  --hard-sample-list "${HARD_SAMPLE_LIST}" \
+  --hard-sample-weight "${HARD_SAMPLE_WEIGHT}" \
   --gpu-id 0
 
 # 训练结束后做一轮小规模门限前诊断，方便快速判断这次训练有没有方向性改善。

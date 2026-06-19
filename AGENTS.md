@@ -45,6 +45,8 @@
 
 ## Current Status
 
+2026-06-19 已同步服务器最新结果提交 `711b8ff`，并在本地将既有文档提交 rebase 到远端最新结果之上。当前最终主候选为 `v8_mag_w006_edge_w003_from_v7_10ep/best_epe.pth`：全量 10360 样本相对 v4 的综合逐图胜率为 5909/10360（57.04%），相对 v7 同为 5909/10360，相对 v9-A 为 5561/10360。v8_mag 的优势集中在 crack/global edge fidelity 与 folding 稳定性，crack EPE 与 Dice 仍只接近 v4，距离“三区稳妥达标”还缺少更明显的 crack EPE/Dice 增益。为继续冲指标，已新增 v10 hard-sample 训练入口：`train_v2.py` 支持从困难样本清单启用 `WeightedRandomSampler`，`run_train_slurm.py` 与 `slurm_train_crackwarp.sbatch` 支持 `HARD_SAMPLE_LIST` / `HARD_SAMPLE_WEIGHT` 参数，新增 `utils/build_hard_sample_list.py` 可从 compare 输出中的 `old_better_images.txt`、`joint_failure_images.txt` 生成困难样本清单。默认参数为空或权重为 1 时不改变历史训练行为。
+
 已完成用户补充代码和数据后的只读确认。当前仓库已经从纯报告资料仓库变为可继续工程诊断和训练优化的算法项目：总计约 21,913 个非 `.venv` 文件、约 27.25GB，其中主训练集 `underwater_crack_v3` 约 26.21GB，训练输出 `output_crackwarp` 约 0.98GB。主数据集配对完整，抽样标签为 `(2,512,512)` 的 `float32`，数值范围稳定在 `[0,1]`。已有训练跑满 50 epoch，最佳 Val EPE 约 117.885px；gate report 显示所有 checkpoint 均为 `below_minimum`，最佳 `best_epe.pth` 的 crack EPE 约 112.021px、Dice 约 0.0026、edge fidelity 约 0.295、global EPE 约 112.606px、folding rate 约 0.570，距离工程门限仍有明显差距。已新增 Slurm 训练入口，但本机 `.venv` 是从旧机器拷贝来的失效环境，当前无法执行 `.venv\Scripts\python.exe`，需要在 Slurm/新机器上重建虚拟环境后再训练。
 
 已完成项目下全部 Markdown 与 Word 文档的只读阅读和目标归纳：文档总体确认本项目的核心目标不是普通图像增强，而是学习水下裂缝扭曲图像的归一化逆映射坐标场，通过 `cv2.remap` 将扭曲裂缝恢复到更接近无扭曲的几何形态。项目评价重点应优先围绕裂缝主体位置、细裂缝分叉、边缘锐度、局部 ROI 对齐、预测恢复幅度和位移场可逆性，而不是只看全图平均损失。普通版实验报告强调模型已稳定收敛并具备一定全局校正能力；详细版报告、gate report、交接文档和工作量说明则共同指出当前结果仍未达到工程或论文级验收标准，下一阶段应以复现诊断、坐标/逆映射一致性排查、Slurm 全量训练、裂缝区域监督增强、folding/Jacobian 约束、ROI 局部细化、对比实验和消融实验为主线。
@@ -205,6 +207,11 @@
 - 2026-06-15 服务器已完成 v4/v5/v6 的 10360 张全量评估和全量逐图对比。全量 v4 结果为 crack EPE 114.416328、global EPE 111.964767、Dice 0.276011、crack/global edge 0.111250/0.098206、folding 0.583643；全量 v5 为 crack EPE 114.440132、global EPE 112.246910、Dice 0.274965、crack/global edge 0.120241/0.109083、folding 0.579404；全量 v6 为 crack EPE 114.494644、global EPE 112.070282、Dice 0.274207、crack/global edge 0.124766/0.114296、folding 0.582038。全量逐图综合评分中，v5 相对 v4 为 5503/10360 张更优，v6 相对 v4 为 5710/10360 张更优。当前最终口径更新为：v4 是 EPE/Dice 均值最稳的保守主模型，v5 是 folding 最优的几何稳定候选，v6 是 edge 最优的补充实验；v5/v6 综合覆盖面优于 v4，但不能写成全指标碾压。
 
 ## Next TODO
+
+- 服务器下一步先 `git pull --rebase origin main` 获取 v10 hard-sample 训练入口，然后运行 `.venv/bin/python -m py_compile train_v2.py run_train_slurm.py utils/build_hard_sample_list.py`。
+- 在服务器用现有未跟踪 compare 诊断清单生成 hard-sample 列表，优先合并 v8 相对 v4/v7/v9-A 的 `old_better_images.txt` 与 `joint_failure_images.txt`，并以 family 模式输出 top 80 困难族群。
+- 先提交 `v10_hard_roi_smoke`：从 `v8_mag_w006_edge_w003_from_v7_10ep/best_epe.pth` 初始化，`HARD_SAMPLE_WEIGHT=3.0`，2 epoch，gpuHz/shortjobs 验证采样链路和 120/1000 样本方向；若 crack EPE/Dice 没有改善，不要直接扩 10 epoch。
+- 若 v10 smoke 相比 v8 在 1000 样本上能追回 crack EPE 或 Dice 且不破坏 edge/folding，再扩为 10 epoch；否则需要进一步做 ROI 局部 loss 或 hard-sample 权重/清单粒度对照。
 
 - 在另一台电脑继续开发时，优先阅读 `项目交接与下一步开发计划.md`，按其中顺序先搭环境、做只读检查和小闭环复现。
 - 在 Slurm 集群上训练前，先重新创建项目本地 `.venv`，按 CUDA 12.x 兼容策略安装 `torch torchvision` 和其余训练依赖；不要复用从 Windows/旧电脑拷贝来的 `.venv`。

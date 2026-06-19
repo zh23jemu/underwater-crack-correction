@@ -67,6 +67,8 @@ accum_steps = 4
 mixup_start_epoch = 30
 mixup_prob = 0.10
 mixup_alpha = 0.05
+hard_sample_list = ''  # 可选：困难样本清单；为空时使用普通随机采样
+hard_sample_weight = 1.0  # 困难样本采样权重；>1 时启用 WeightedRandomSampler
 
 # ---- Logging / eval ----
 display_interval = 20

@@ -98,6 +98,17 @@ def parse_args() -> argparse.Namespace:
         help="可选：从已有模型权重初始化本次训练，适合 loss 小改动 fine-tune。",
     )
     parser.add_argument(
+        "--hard-sample-list",
+        default=getattr(config, "hard_sample_list", ""),
+        help="可选：困难样本清单；支持文件名、无后缀样本名或原始裂缝族群编号。",
+    )
+    parser.add_argument(
+        "--hard-sample-weight",
+        type=float,
+        default=getattr(config, "hard_sample_weight", 1.0),
+        help="困难样本采样权重；大于 1 时启用 WeightedRandomSampler。",
+    )
+    parser.add_argument(
         "--gpu-id",
         type=int,
         default=0,
@@ -132,6 +143,8 @@ def main() -> None:
     config.crack_mag_robust_delta = args.crack_mag_robust_delta
     config.crack_mag_over_weight = args.crack_mag_over_weight
     config.init_checkpoint = args.init_checkpoint
+    config.hard_sample_list = args.hard_sample_list
+    config.hard_sample_weight = args.hard_sample_weight
     config.gpu_id = args.gpu_id
 
     # 重要保护：当前原训练脚本中 restart_training=True 会删除 output_dir。
@@ -152,6 +165,8 @@ def main() -> None:
     print("[Slurm wrapper] crack_mag_robust_delta =", config.crack_mag_robust_delta)
     print("[Slurm wrapper] crack_mag_over_weight =", config.crack_mag_over_weight)
     print("[Slurm wrapper] init_checkpoint =", config.init_checkpoint)
+    print("[Slurm wrapper] hard_sample_list =", config.hard_sample_list)
+    print("[Slurm wrapper] hard_sample_weight =", config.hard_sample_weight)
     print("[Slurm wrapper] restart_training =", config.restart_training)
 
     # 在配置覆盖完成后再导入训练脚本，确保 train_v2.py 拿到的是同一个 config_crack 模块实例。

@@ -109,6 +109,77 @@ def seed_worker(worker_id):
     random.seed(worker_seed)
 
 
+def load_hard_sample_ids(list_path):
+    """
+    读取困难样本清单。
+
+    清单可以混用三种粒度：
+      1. 完整文件名，例如 crack0563_01.png；
+      2. 不带后缀的样本名，例如 crack0563_01；
+      3. 原始裂缝族群编号，例如 crack0563。
+
+    第 3 种会匹配同一原始裂缝生成的全部增强样本，适合当前 v10
+    hard-sample 训练：共同失败往往集中在某些原图族群，而不只是单张
+    合成图。
+    """
+    if not list_path:
+        return set()
+    if not os.path.exists(list_path):
+        raise FileNotFoundError(f'Hard sample list not found: {list_path}')
+
+    hard_ids = set()
+    with open(list_path, 'r', encoding='utf-8') as f:
+        for line in f:
+            item = line.strip()
+            if not item or item.startswith('#'):
+                continue
+            hard_ids.add(item)
+    return hard_ids
+
+
+def build_train_sampler(train_subset, hard_ids, hard_weight, log_file):
+    """
+    根据困难样本清单构建 WeightedRandomSampler。
+
+    默认训练仍沿用 DataLoader(shuffle=True)。只有同时满足：
+      - hard_ids 非空；
+      - hard_weight > 1；
+    才启用加权采样。这样旧实验和复现实验不会被隐式改变。
+    """
+    if not hard_ids or hard_weight <= 1.0:
+        return None
+
+    weights = []
+    hard_count = 0
+    dataset = train_subset.dataset
+    for original_idx in train_subset.indices:
+        img_path = dataset.image_path[original_idx]
+        basename = os.path.basename(img_path)
+        stem = os.path.splitext(basename)[0]
+        family = stem.rsplit('_', 1)[0]
+        is_hard = basename in hard_ids or stem in hard_ids or family in hard_ids
+        weights.append(float(hard_weight if is_hard else 1.0))
+        hard_count += int(is_hard)
+
+    if hard_count == 0:
+        log_message(
+            f'Hard sampler disabled: no matched samples from {len(hard_ids)} ids',
+            log_file,
+        )
+        return None
+
+    log_message(
+        f'Hard sampler enabled: matched={hard_count}/{len(weights)}, '
+        f'weight={hard_weight}',
+        log_file,
+    )
+    return Data.WeightedRandomSampler(
+        weights=torch.as_tensor(weights, dtype=torch.double),
+        num_samples=len(weights),
+        replacement=True,
+    )
+
+
 # ──────────────────────────────────────────────────────────────
 # 验证
 # ──────────────────────────────────────────────────────────────
@@ -182,6 +253,13 @@ def main():
     # 验证集关闭数据增强
     val_subset.dataset.augment.training = False
     log_message(f'Dataset: total={total}, train={train_size}, val={val_size}', log_file)
+    hard_ids = load_hard_sample_ids(getattr(config, 'hard_sample_list', ''))
+    train_sampler = build_train_sampler(
+        train_subset,
+        hard_ids,
+        float(getattr(config, 'hard_sample_weight', 1.0)),
+        log_file,
+    )
 
     log_message(
         f'Dataloader workers={config.workers}, pin_memory={torch.cuda.is_available()}',
@@ -196,7 +274,8 @@ def main():
     train_loader = Data.DataLoader(
         train_subset,
         batch_size=config.train_batch_size,
-        shuffle=True,
+        shuffle=(train_sampler is None),
+        sampler=train_sampler,
         drop_last=True,
         **common_loader_kwargs,
     )
