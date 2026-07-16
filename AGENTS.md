@@ -45,6 +45,8 @@
 
 ## Current Status
 
+2026-07-16 用户指出此前做过的 v87 80 epoch 长训版本没有补入最终 Word。已新增 `scripts/insert_v87_long80_summary_to_final_docx.py`，在 `实验部分整理最终_填表补图_补齐指标.docx` 的训练曲线章节补充 `图2-5 v87 80 epoch 长训指标摘要`，并写明 v87 是 80 epoch 长训版本，不同于 v108 的 1 epoch 数据消融 smoke。由于本地资料中未找到 v87 逐 epoch 原始 `train.log`，本次不伪造逐 epoch 曲线，而是使用已记录的真实训练末尾、最佳 EPE 和 120 样本评估指标生成 `delivery_v107_v108_html/assets/curves/v87_long80_summary.png`。校验结果：原有 5 张表结构保持 `[(6,4), (4,8), (4,6), (7,10), (6,10)]`，图片数从 `13` 增加到 `14`。
+
 2026-07-15 已按用户选择的“方案 A”补齐客观评价表中 Roboflow 两个数据集的外部四模型 + v107 指标。新增 `scripts/run_roboflow_external_v107_eval.sh`、`scripts/summarize_roboflow_external_v107_eval.py` 和 `scripts/submit_roboflow_external_v107_eval.sbatch`，通过 GitHub Release `roboflow-external-v107-scripts-20260715` 同步到 usmidet，提交短任务 `43079810` 并完成；普通重复排队任务 `43079790` 已取消。补评估结果通过 Release `roboflow-external-v107-results-20260715` 拉回本地 `roboflow_external_v107_eval_results_local/`。最终 CSV 共 10 行：Roboflow underwater crack 160 样本、Roboflow concrete/blue crack 48 样本，各包含 RAFT、UniMatch、SEA-RAFT、GMA/RAFT-small fallback、V107。已更新 `scripts/fill_user_final_docx_tables_and_figures.py` 并生成 `实验部分整理最终_填表补图_补齐指标.docx`；校验结果：表格结构保持 `[(6,4), (4,8), (4,6)]`，图片数 `2`，文档不再包含“未单独评估”。报告口径仍需说明外部四模型为 oracle-pair dense matching 参考/上界，v107 是单图模型，二者不是完全同输入公平横比。
 
 2026-07-15 已按用户要求将最终 Word `实验部分整理最终_填表补图_补齐指标.docx` 从微信临时目录复制到项目根目录，准备随方案 A 补评估脚本、汇总脚本和项目状态记录一起提交。提交范围只包含本次交付相关文件，避免混入仓库中大量历史结果包和未归类输出。
