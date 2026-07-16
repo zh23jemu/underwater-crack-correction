@@ -4,15 +4,16 @@
 把漏掉的 v87 80 epoch 长训版本补充到最终 Word 的训练曲线章节。
 
 说明：
-- 当前本地资料中没有找到 v87 的逐 epoch 原始 train.log，因此不伪造逐 epoch 曲线；
-- 本脚本使用项目记录中已保存的真实 v87 训练末尾、最佳值和 120 样本评估指标，
-  生成“v87 80 epoch 长训指标摘要图”；
+- 若本地已从远端找回 v87 epoch 汇总行，则生成真实的 80 epoch 训练曲线；
+- 若 epoch 汇总行缺失，则退回使用项目记录中已保存的真实 v87 训练末尾、最佳值和
+  120 样本评估指标，生成“v87 80 epoch 长训指标摘要图”；
 - 插入 Word 时只追加段落和图片，不修改已有表格、已有图片和已有正文。
 """
 
 from __future__ import annotations
 
 from pathlib import Path
+import re
 
 import matplotlib.pyplot as plt
 from docx import Document
@@ -23,7 +24,11 @@ from docx.oxml.ns import qn
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCX_PATH = ROOT / "实验部分整理最终_填表补图_补齐指标.docx"
-FIG_PATH = ROOT / "delivery_v107_v108_html" / "assets" / "curves" / "v87_long80_summary.png"
+EPOCH_LOG_PATH = ROOT / "output_crackwarp_slurm" / "v87_spatial_cap_long80_from_v83" / "v87_epoch_summary_lines.log"
+FIG_PATH = ROOT / "delivery_v107_v108_html" / "assets" / "curves" / "v87_long80_training_curves.png"
+OLD_FIG_PATH = ROOT / "delivery_v107_v108_html" / "assets" / "curves" / "v87_long80_summary.png"
+NEW_MARKER = "图2-5 v87 80 epoch 长训练曲线"
+OLD_MARKER = "图2-5 v87 80 epoch 长训指标摘要"
 
 
 def style_paragraph(paragraph, font_size: float = 10.0, bold: bool = False) -> None:
@@ -67,10 +72,85 @@ def add_picture_after(doc: Document, anchor, image_path: Path, caption: str):
     return insert_after(anchor, caption_para)
 
 
+def parse_epoch_summary_lines() -> list[dict[str, float]]:
+    """解析从远端 train.log 抽取的 v87 epoch 汇总行。"""
+
+    if not EPOCH_LOG_PATH.exists():
+        return []
+
+    pattern = re.compile(
+        r"Epoch (?P<epoch>\d+)/80 \| Train Loss: (?P<train_loss>[0-9.]+) "
+        r"EPE: (?P<train_epe>[0-9.]+)px \| Val Loss: (?P<val_loss>[0-9.]+) "
+        r"EPE: (?P<val_epe>[0-9.]+)px CrackEPE: (?P<crack_epe>[0-9.]+)px "
+        r"\| LR: (?P<lr>[0-9.eE+-]+)"
+    )
+    rows: list[dict[str, float]] = []
+    for line in EPOCH_LOG_PATH.read_text(encoding="utf-8", errors="replace").splitlines():
+        match = pattern.search(line)
+        if not match:
+            continue
+        item = {key: float(value) for key, value in match.groupdict().items()}
+        rows.append(item)
+    return rows
+
+
+def build_v87_training_curve() -> bool:
+    """优先用真实 epoch 汇总行生成 v87 80 epoch 训练曲线。"""
+
+    rows = parse_epoch_summary_lines()
+    if len(rows) != 80:
+        return False
+
+    FIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    epochs = [row["epoch"] for row in rows]
+
+    fig, axes = plt.subplots(2, 2, figsize=(12.8, 7.2), dpi=180)
+    fig.patch.set_facecolor("white")
+
+    axes[0, 0].plot(epochs, [row["train_loss"] for row in rows], label="Train Loss", color="#2563eb", linewidth=2)
+    axes[0, 0].plot(epochs, [row["val_loss"] for row in rows], label="Val Loss", color="#f97316", linewidth=2)
+    axes[0, 0].set_title("Loss over 80 epochs")
+    axes[0, 0].set_xlabel("Epoch")
+    axes[0, 0].set_ylabel("Loss")
+    axes[0, 0].grid(alpha=0.25)
+    axes[0, 0].legend()
+
+    axes[0, 1].plot(epochs, [row["train_epe"] for row in rows], label="Train EPE", color="#0f766e", linewidth=2)
+    axes[0, 1].plot(epochs, [row["val_epe"] for row in rows], label="Val EPE", color="#dc2626", linewidth=2)
+    axes[0, 1].plot(epochs, [row["crack_epe"] for row in rows], label="Crack EPE", color="#7c3aed", linewidth=2)
+    axes[0, 1].set_title("EPE metrics over 80 epochs")
+    axes[0, 1].set_xlabel("Epoch")
+    axes[0, 1].set_ylabel("px")
+    axes[0, 1].grid(alpha=0.25)
+    axes[0, 1].legend()
+
+    axes[1, 0].plot(epochs, [row["lr"] for row in rows], color="#0891b2", linewidth=2)
+    axes[1, 0].set_title("Learning rate schedule")
+    axes[1, 0].set_xlabel("Epoch")
+    axes[1, 0].set_ylabel("LR")
+    axes[1, 0].grid(alpha=0.25)
+
+    final = rows[-1]
+    summary_names = ["Train EPE", "Val EPE", "Crack EPE"]
+    summary_values = [final["train_epe"], final["val_epe"], final["crack_epe"]]
+    axes[1, 1].bar(summary_names, summary_values, color=["#2563eb", "#f97316", "#7c3aed"])
+    axes[1, 1].set_title("Final epoch metrics")
+    axes[1, 1].set_ylabel("px")
+    axes[1, 1].grid(axis="y", alpha=0.25)
+    for index, value in enumerate(summary_values):
+        axes[1, 1].text(index, value + 0.35, f"{value:.2f}", ha="center", va="bottom", fontsize=9)
+
+    fig.suptitle("v87 80 epoch long training curves", fontsize=14, y=0.99)
+    fig.tight_layout(rect=(0, 0, 1, 0.96))
+    fig.savefig(FIG_PATH, bbox_inches="tight")
+    plt.close(fig)
+    return True
+
+
 def build_v87_summary_figure() -> None:
     """用真实记录指标生成 v87 80 epoch 长训摘要图。"""
 
-    FIG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    OLD_FIG_PATH.parent.mkdir(parents=True, exist_ok=True)
 
     # 这些数值来自项目 AGENTS.md 中记录的 v87 长训结果和 120 样本评估结果。
     train_metrics = {
@@ -114,7 +194,7 @@ def build_v87_summary_figure() -> None:
     )
     fig.text(0.5, 0.02, note, ha="center", va="bottom", fontsize=8, color="#475569")
     fig.tight_layout(rect=(0, 0.07, 1, 1))
-    fig.savefig(FIG_PATH, bbox_inches="tight")
+    fig.savefig(OLD_FIG_PATH, bbox_inches="tight")
     plt.close(fig)
 
 
@@ -133,18 +213,21 @@ def find_insert_anchor(doc: Document):
     raise RuntimeError("未找到训练曲线插入位置")
 
 
-def refresh_existing_figure(doc: Document, marker: str) -> bool:
+def refresh_existing_figure(doc: Document, marker: str, new_caption: str, image_path: Path) -> bool:
     """如果 Word 中已存在图2-5，则替换其前一段图片的嵌入数据。"""
 
     marker_index = None
     for index, paragraph in enumerate(doc.paragraphs):
         if marker in paragraph.text:
             marker_index = index
+            paragraph.text = new_caption
+            style_paragraph(paragraph, font_size=9.0)
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
             break
     if marker_index is None:
         return False
 
-    image_bytes = FIG_PATH.read_bytes()
+    image_bytes = image_path.read_bytes()
     for paragraph in reversed(doc.paragraphs[:marker_index]):
         blips = paragraph._p.xpath(".//a:blip")  # pylint: disable=protected-access
         if not blips:
@@ -165,16 +248,19 @@ def main() -> None:
     if not DOCX_PATH.exists():
         raise FileNotFoundError(DOCX_PATH)
 
-    build_v87_summary_figure()
+    has_epoch_curve = build_v87_training_curve()
+    if not has_epoch_curve:
+        build_v87_summary_figure()
 
     doc = Document(DOCX_PATH)
     before_tables = [(len(table.rows), len(table.columns)) for table in doc.tables]
     before_shapes = len(doc.inline_shapes)
 
-    marker = "图2-5 v87 80 epoch 长训指标摘要"
+    marker = NEW_MARKER if has_epoch_curve else OLD_MARKER
     all_text = "\n".join(paragraph.text for paragraph in doc.paragraphs)
-    if marker in all_text:
-        refreshed = refresh_existing_figure(doc, marker)
+    existing_marker = NEW_MARKER if NEW_MARKER in all_text else OLD_MARKER if OLD_MARKER in all_text else ""
+    if existing_marker:
+        refreshed = refresh_existing_figure(doc, existing_marker, marker, FIG_PATH if has_epoch_curve else OLD_FIG_PATH)
         doc.save(DOCX_PATH)
         print("v87 long80 supplement already exists; refreshed", refreshed)
         return
@@ -187,7 +273,7 @@ def main() -> None:
         "该版本证明长训能明显改善常规指标，但 ROI 复核仍存在局部涟漪、糊化和形变伪影，因此只作为长训代表和诊断基线。",
         font_size=10.0,
     )
-    add_picture_after(doc, anchor, FIG_PATH, marker)
+    add_picture_after(doc, anchor, FIG_PATH if has_epoch_curve else OLD_FIG_PATH, marker)
 
     doc.save(DOCX_PATH)
 
@@ -197,7 +283,7 @@ def main() -> None:
         raise RuntimeError(f"表格结构发生变化: {before_tables} -> {after_tables}")
 
     print(DOCX_PATH)
-    print(FIG_PATH)
+    print(FIG_PATH if has_epoch_curve else OLD_FIG_PATH)
     print("tables", after_tables)
     print("inline_shapes_before", before_shapes)
     print("inline_shapes_after", len(check.inline_shapes))
